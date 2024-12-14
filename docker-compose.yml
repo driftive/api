@@ -1,0 +1,31 @@
+version: '3.7'
+services:
+  driftive:
+    image: driftive
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"
+#    volumes:
+#      - ./example.compose.config.yml:/app/config.yml
+    command:
+      - /app/driftive
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_USER: driftive
+      POSTGRES_PASSWORD: driftive
+      POSTGRES_DB: driftive
+    ports:
+      - "5432:5432"
+  migrations:
+    image: flyway/flyway
+    command: -url=jdbc:postgresql://postgres:5432/driftive -user=driftive -password=driftive -connectRetries=60 migrate
+    volumes:
+      - ./migrations:/flyway/sql
+

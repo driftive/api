@@ -1,0 +1,26 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "pkg/repository/queries/"
+    schema: "migrations/"
+    gen:
+      go:
+        package: "queries"
+        emit_pointers_for_null_types: true
+        out: "pkg/repository/queries"
+        sql_package: "pgx/v5"
+overrides:
+  go:
+    overrides:
+      - db_type: "timestamptz"
+        go_type:
+          import: time
+          type: Time
+          pointer: true
+        nullable: true
+        engine: postgresql
+      - db_type: "timestamptz"
+        go_type: "time.Time"
+        nullable: false
+        engine: postgresql
+

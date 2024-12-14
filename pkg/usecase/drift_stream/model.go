@@ -1,6 +1,8 @@
 package drift_stream
 
-import "driftive.cloud/api/model"
+import (
+	"driftive.cloud/api/pkg/model"
+)
 
 type ProjectDriftAnalysisState struct {
 	Project    model.Project
