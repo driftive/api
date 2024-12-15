@@ -40,19 +40,19 @@ func NewDB(cfg config.Config) *DB {
 	}
 }
 
-func (db *DB) Queries(ctx context.Context) *queries.Queries {
+func (d *DB) Queries(ctx context.Context) *queries.Queries {
 	if ctx.Value("tx") != nil {
-		return queries.New(db.Pool).WithTx(ctx.Value("tx").(pgx.Tx))
+		return queries.New(d.Pool).WithTx(ctx.Value("tx").(pgx.Tx))
 	}
-	return db.rawQueries
+	return d.rawQueries
 }
 
-func (db *DB) WithTx(ctx context.Context, fn func(context.Context) error) error {
+func (d *DB) WithTx(ctx context.Context, fn func(context.Context) error) error {
 
 	if ctx.Value("tx") != nil {
 		return errors.New("transaction already in progress")
 	}
-	tx, err := db.Pool.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := d.Pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
