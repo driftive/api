@@ -4,9 +4,11 @@ import (
 	"context"
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
+	"driftive.cloud/api/pkg/model/auth"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
+	"driftive.cloud/api/pkg/usecase/utils/jwt"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,6 +93,7 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 
 			createUserParams := queries.CreateUserParams{
 				Provider:              "GITHUB",
+				ProviderID:            fmt.Sprintf("%d", user.GetID()),
 				Name:                  user.GetName(),
 				Username:              user.GetLogin(),
 				Email:                 user.GetEmail(),
@@ -104,18 +107,38 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 			if err != nil {
 				return err
 			}
+		} else {
+			// Update user
 		}
 
-		return c.Redirect().To("")
+		args := queries.FindUserByProviderAndProviderIdParams{
+			Provider:   "GITHUB",
+			ProviderID: fmt.Sprintf("%d", user.GetID()),
+		}
+		existingUser, err := o.userRepository.FindUserByProviderAndProviderId(ctx, args)
+		if err != nil {
+			log.Error("error finding user by provider and provider id: ", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		userToken := auth.UserToken{
+			ID:       existingUser.ID,
+			Provider: "GITHUB",
+		}
+
+		jwtToken, err := jwt.GenerateJWTToken(userToken, o.cfg.Auth.JwtSecret)
+		if err != nil {
+			log.Error("error generating jwt token: ", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		return c.Redirect().
+			Status(fiber.StatusFound).
+			To(fmt.Sprintf("%s?token=%s", o.cfg.Auth.LoginRedirectUrl, jwtToken))
 	})
 
 	if err != nil {
 		log.Error("error authenticating user: ", err)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	err = c.Redirect().Status(fiber.StatusFound).To("https://localhost:3000")
-	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 

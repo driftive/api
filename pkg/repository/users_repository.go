@@ -9,6 +9,7 @@ import (
 type UserRepository interface {
 	CountUsersByProviderAndEmail(ctx context.Context, arg queries.CountUsersByProviderAndEmailParams) (int64, error)
 	CreateUser(ctx context.Context, arg queries.CreateUserParams) (queries.User, error)
+	FindUserByProviderAndProviderId(ctx context.Context, arg queries.FindUserByProviderAndProviderIdParams) (queries.User, error)
 }
 
 type UserRepo struct {
@@ -21,4 +22,8 @@ func (r *UserRepo) CountUsersByProviderAndEmail(ctx context.Context, arg queries
 
 func (r *UserRepo) CreateUser(ctx context.Context, arg queries.CreateUserParams) (queries.User, error) {
 	return r.db.Queries(ctx).CreateUser(ctx, arg)
+}
+
+func (r *UserRepo) FindUserByProviderAndProviderId(ctx context.Context, arg queries.FindUserByProviderAndProviderIdParams) (queries.User, error) {
+	return r.db.Queries(ctx).FindUserByProviderAndProviderId(ctx, arg)
 }

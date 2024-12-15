@@ -3,11 +3,11 @@ SELECT *
 FROM users
 WHERE id = @id;
 
--- name: FindUserByProviderAndEmail :one
+-- name: FindUserByProviderAndProviderId :one
 SELECT *
 FROM users
 WHERE provider = @provider
-  AND email = @email;
+  AND provider_id = @provider_id;
 
 -- name: CountUsersByProviderAndEmail :one
 SELECT COUNT(*)
@@ -16,6 +16,6 @@ WHERE provider = $1
   AND email = $2;
 
 -- name: CreateUser :one
-INSERT INTO users (provider, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at)
-VALUES (@provider, @name, @username, @email, @access_token, @access_token_expires_at, @refresh_token, @refresh_token_expires_at)
+INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at)
+VALUES (@provider, @provider_id, @name, @username, @email, @access_token, @access_token_expires_at, @refresh_token, @refresh_token_expires_at)
 RETURNING *;

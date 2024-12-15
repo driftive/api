@@ -2,6 +2,7 @@ CREATE TABLE users
 (
     id                       BIGSERIAL PRIMARY KEY,
     provider                 VARCHAR(255) NOT NULL,
+    provider_id              VARCHAR      NOT NULL,
     name                     VARCHAR      NOT NULL,
     username                 VARCHAR(255) NOT NULL,
     email                    VARCHAR(255) NOT NULL,

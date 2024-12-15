@@ -30,13 +30,14 @@ func (q *Queries) CountUsersByProviderAndEmail(ctx context.Context, arg CountUse
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (provider, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, provider, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
 `
 
 type CreateUserParams struct {
 	Provider              string
+	ProviderID            string
 	Name                  string
 	Username              string
 	Email                 string
@@ -49,6 +50,7 @@ type CreateUserParams struct {
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.Provider,
+		arg.ProviderID,
 		arg.Name,
 		arg.Username,
 		arg.Email,
@@ -61,6 +63,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	err := row.Scan(
 		&i.ID,
 		&i.Provider,
+		&i.ProviderID,
 		&i.Name,
 		&i.Username,
 		&i.Email,
@@ -73,7 +76,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const findUserByID = `-- name: FindUserByID :one
-SELECT id, provider, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
 FROM users
 WHERE id = $1
 `
@@ -84,6 +87,7 @@ func (q *Queries) FindUserByID(ctx context.Context, id int64) (User, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.Provider,
+		&i.ProviderID,
 		&i.Name,
 		&i.Username,
 		&i.Email,
@@ -95,24 +99,25 @@ func (q *Queries) FindUserByID(ctx context.Context, id int64) (User, error) {
 	return i, err
 }
 
-const findUserByProviderAndEmail = `-- name: FindUserByProviderAndEmail :one
-SELECT id, provider, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+const findUserByProviderAndProviderId = `-- name: FindUserByProviderAndProviderId :one
+SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
 FROM users
 WHERE provider = $1
-  AND email = $2
+  AND provider_id = $2
 `
 
-type FindUserByProviderAndEmailParams struct {
-	Provider string
-	Email    string
+type FindUserByProviderAndProviderIdParams struct {
+	Provider   string
+	ProviderID string
 }
 
-func (q *Queries) FindUserByProviderAndEmail(ctx context.Context, arg FindUserByProviderAndEmailParams) (User, error) {
-	row := q.db.QueryRow(ctx, findUserByProviderAndEmail, arg.Provider, arg.Email)
+func (q *Queries) FindUserByProviderAndProviderId(ctx context.Context, arg FindUserByProviderAndProviderIdParams) (User, error) {
+	row := q.db.QueryRow(ctx, findUserByProviderAndProviderId, arg.Provider, arg.ProviderID)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Provider,
+		&i.ProviderID,
 		&i.Name,
 		&i.Username,
 		&i.Email,

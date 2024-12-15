@@ -11,6 +11,7 @@ import (
 type User struct {
 	ID                    int64
 	Provider              string
+	ProviderID            string
 	Name                  string
 	Username              string
 	Email                 string

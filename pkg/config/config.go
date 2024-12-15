@@ -16,6 +16,7 @@ func getEnv(key, defaultValue string) string {
 type Config struct {
 	Database        Database
 	GithubAppConfig GitHubAppConfig
+	Auth            AuthConfig
 }
 
 type Database struct {
@@ -33,6 +34,12 @@ type GitHubAppConfig struct {
 	CallbackURL  string
 	// GithubURL is the URL to the Github. Default is https://github.com
 	GithubURL string
+}
+
+type AuthConfig struct {
+	// LoginRedirectUrl is the URL to redirect to after login. Default is http://localhost:3001/login/success. It should be the URL of the frontend
+	LoginRedirectUrl string
+	JwtSecret        string
 }
 
 func LoadConfig() (*Config, error) {
@@ -63,9 +70,15 @@ func LoadConfig() (*Config, error) {
 		GithubURL:    os.Getenv("GITHUB_URL"),
 	}
 
+	auth := AuthConfig{
+		LoginRedirectUrl: getEnv("LOGIN_REDIRECT_URL", "http://localhost:3001/login/success"),
+		JwtSecret:        getEnv("JWT_SECRET", ""),
+	}
+
 	config := Config{
 		Database:        database,
 		GithubAppConfig: ghAppConfig,
+		Auth:            auth,
 	}
 	return &config, nil
 }
