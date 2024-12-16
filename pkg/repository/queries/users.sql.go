@@ -75,6 +75,58 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const findExpiringTokensByProvider = `-- name: FindExpiringTokensByProvider :many
+SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+FROM users
+WHERE provider = $1
+  AND access_token_expires_at IS NOT NULL
+  AND access_token_expires_at < $2 LIMIT $4
+OFFSET $3
+`
+
+type FindExpiringTokensByProviderParams struct {
+	Provider    string
+	Date        *time.Time
+	Queryoffset int32
+	Maxresults  int32
+}
+
+func (q *Queries) FindExpiringTokensByProvider(ctx context.Context, arg FindExpiringTokensByProviderParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, findExpiringTokensByProvider,
+		arg.Provider,
+		arg.Date,
+		arg.Queryoffset,
+		arg.Maxresults,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Provider,
+			&i.ProviderID,
+			&i.Name,
+			&i.Username,
+			&i.Email,
+			&i.AccessToken,
+			&i.AccessTokenExpiresAt,
+			&i.RefreshToken,
+			&i.RefreshTokenExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findUserByID = `-- name: FindUserByID :one
 SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
 FROM users
@@ -113,6 +165,47 @@ type FindUserByProviderAndProviderIdParams struct {
 
 func (q *Queries) FindUserByProviderAndProviderId(ctx context.Context, arg FindUserByProviderAndProviderIdParams) (User, error) {
 	row := q.db.QueryRow(ctx, findUserByProviderAndProviderId, arg.Provider, arg.ProviderID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.ProviderID,
+		&i.Name,
+		&i.Username,
+		&i.Email,
+		&i.AccessToken,
+		&i.AccessTokenExpiresAt,
+		&i.RefreshToken,
+		&i.RefreshTokenExpiresAt,
+	)
+	return i, err
+}
+
+const updateUserTokens = `-- name: UpdateUserTokens :one
+UPDATE users
+SET access_token             = $1,
+    access_token_expires_at  = $2,
+    refresh_token            = $3,
+    refresh_token_expires_at = $4
+WHERE id = $5 RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+`
+
+type UpdateUserTokensParams struct {
+	AccessToken           string
+	AccessTokenExpiresAt  *time.Time
+	RefreshToken          string
+	RefreshTokenExpiresAt *time.Time
+	ID                    int64
+}
+
+func (q *Queries) UpdateUserTokens(ctx context.Context, arg UpdateUserTokensParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserTokens,
+		arg.AccessToken,
+		arg.AccessTokenExpiresAt,
+		arg.RefreshToken,
+		arg.RefreshTokenExpiresAt,
+		arg.ID,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,

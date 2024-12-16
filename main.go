@@ -39,7 +39,10 @@ func main() {
 	api := app.Group("/api")
 	v1 := api.Group("/v1")
 
-	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, repo.UserRepository())
+	userRepo := repo.UserRepository()
+
+	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo)
+	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
 
 	// Public routes
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -78,6 +81,9 @@ func main() {
 
 		return c.JSON(ghUser)
 	})
+
+	// Start background jobs
+	ghTokenRefresher.RefreshTokens()
 
 	app.Listen(":3000")
 }

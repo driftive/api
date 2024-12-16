@@ -5,6 +5,7 @@ import (
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/model/auth"
+	"driftive.cloud/api/pkg/model/auth/github"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
@@ -30,15 +31,6 @@ type OAuthHandler struct {
 	cfg            config.Config
 	db             *db.DB
 	userRepository repository.UserRepository
-}
-
-type AccessTokenResponse struct {
-	AccessToken           string `json:"access_token"`
-	ExpiresIn             int    `json:"expires_in"`
-	RefreshToken          string `json:"refresh_token"`
-	RefreshTokenExpiresIn int    `json:"refresh_token_expires_in"`
-	Scope                 string `json:"scope"`
-	TokenType             string `json:"token_type"`
 }
 
 func NewOAuthHandler(cfg config.Config, db *db.DB, userRepo repository.UserRepository) OAuthHandler {
@@ -144,7 +136,7 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 	return nil
 }
 
-func (o *OAuthHandler) ExchangeCodeForToken(oauthCode string) (*AccessTokenResponse, error) {
+func (o *OAuthHandler) ExchangeCodeForToken(oauthCode string) (*github.AccessTokenResponse, error) {
 	client := http.Client{}
 
 	ghUrl := os.Getenv("GITHUB_URL")
@@ -176,7 +168,7 @@ func (o *OAuthHandler) ExchangeCodeForToken(oauthCode string) (*AccessTokenRespo
 
 	log.Info("gh code exchange response: ", string(respBody))
 
-	tokenResponse := AccessTokenResponse{}
+	tokenResponse := github.AccessTokenResponse{}
 	err = json.Unmarshal(respBody, &tokenResponse)
 	if err != nil {
 		log.Error("error unmarshalling response: ", err)
