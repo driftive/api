@@ -12,8 +12,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/log"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
 	"io"
 	"net/http"
 	"os"
@@ -45,18 +45,16 @@ func NewOAuthHandler(cfg config.Config, db *db.DB, userRepo repository.UserRepos
 	return OAuthHandler{cfg: cfg, db: db, userRepository: userRepo}
 }
 
-func (o *OAuthHandler) Authenticate(c fiber.Ctx) error {
+func (o *OAuthHandler) Authenticate(c *fiber.Ctx) error {
 	state := "test_state"
 	authUrl := fmt.
 		Sprintf("https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
 			o.cfg.GithubAppConfig.ClientID, o.cfg.GithubAppConfig.CallbackURL, state)
 
-	return c.Redirect().
-		Status(fiber.StatusFound).
-		To(authUrl)
+	return c.Redirect(authUrl, fiber.StatusFound)
 }
 
-func (o *OAuthHandler) Callback(c fiber.Ctx) error {
+func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 	ctx := c.Context()
 	code := c.Query("code")
 	log.Info("gh auth code: ", code)
@@ -132,9 +130,10 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 
-		return c.Redirect().
-			Status(fiber.StatusFound).
-			To(fmt.Sprintf("%s?token=%s", o.cfg.Auth.LoginRedirectUrl, jwtToken))
+		return c.Redirect(
+			fmt.Sprintf("%s?token=%s", o.cfg.Auth.LoginRedirectUrl, jwtToken),
+			fiber.StatusFound,
+		)
 	})
 
 	if err != nil {

@@ -6,7 +6,7 @@ import (
 	"driftive.cloud/api/pkg/repository/queries"
 	"errors"
 	"fmt"
-	"github.com/gofiber/fiber/v3/log"
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
