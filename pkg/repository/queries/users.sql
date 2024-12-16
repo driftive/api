@@ -9,15 +9,25 @@ FROM users
 WHERE provider = @provider
   AND provider_id = @provider_id;
 
--- name: CountUsersByProviderAndEmail :one
+-- name: CountUsersByProviderAndProviderId :one
 SELECT COUNT(*)
 FROM users
 WHERE provider = $1
-  AND email = $2;
+  AND provider_id = $2;
 
--- name: CreateUser :one
-INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at)
-VALUES (@provider, @provider_id, @name, @username, @email, @access_token, @access_token_expires_at, @refresh_token, @refresh_token_expires_at)
+-- name: CreateOrUpdateUser :one
+INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token,
+                   refresh_token_expires_at)
+VALUES (@provider, @provider_id, @name, @username, @email, @access_token, @access_token_expires_at, @refresh_token,
+        @refresh_token_expires_at) ON CONFLICT (provider, provider_id) DO
+UPDATE SET
+    name = @name,
+    username = @username,
+    email = @email,
+    access_token = @access_token,
+    access_token_expires_at = @access_token_expires_at,
+    refresh_token = @refresh_token,
+    refresh_token_expires_at = @refresh_token_expires_at
 RETURNING *;
 
 -- name: FindExpiringTokensByProvider :many

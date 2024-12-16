@@ -11,3 +11,5 @@ CREATE TABLE users
     refresh_token            VARCHAR(255) NOT NULL,
     refresh_token_expires_at TIMESTAMPTZ
 );
+
+CREATE UNIQUE INDEX idx_users_provider_provider_id ON users (provider, provider_id);

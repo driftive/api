@@ -83,7 +83,7 @@ func main() {
 	})
 
 	// Start background jobs
-	ghTokenRefresher.RefreshTokens()
+	go ghTokenRefresher.RefreshTokens()
 
 	app.Listen(":3000")
 }

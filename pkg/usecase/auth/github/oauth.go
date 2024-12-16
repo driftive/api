@@ -68,39 +68,29 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 	log.Info("gh user: ", user)
 
 	err = o.db.WithTx(ctx, func(ctx context.Context) error {
-		params := queries.CountUsersByProviderAndEmailParams{
-			Provider: "GITHUB",
-			Email:    user.GetEmail(),
-		}
-		existingUsersCount, err := o.userRepository.CountUsersByProviderAndEmail(ctx, params)
 		if err != nil {
 			return err
 		}
 
-		if existingUsersCount == 0 {
-			accessTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.ExpiresIn), 0)
-			refreshTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.RefreshTokenExpiresIn), 0)
+		accessTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.ExpiresIn), 0)
+		refreshTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.RefreshTokenExpiresIn), 0)
 
-			createUserParams := queries.CreateUserParams{
-				Provider:              "GITHUB",
-				ProviderID:            fmt.Sprintf("%d", user.GetID()),
-				Name:                  user.GetName(),
-				Username:              user.GetLogin(),
-				Email:                 user.GetEmail(),
-				AccessToken:           tokenResponse.AccessToken,
-				AccessTokenExpiresAt:  &accessTokenExpiresAt,
-				RefreshToken:          tokenResponse.RefreshToken,
-				RefreshTokenExpiresAt: &refreshTokenExpiresAt,
-			}
-
-			_, err := o.userRepository.CreateUser(ctx, createUserParams)
-			if err != nil {
-				return err
-			}
-		} else {
-			// Update user
+		createUserParams := queries.CreateOrUpdateUserParams{
+			Provider:              "GITHUB",
+			ProviderID:            fmt.Sprintf("%d", user.GetID()),
+			Name:                  user.GetName(),
+			Username:              user.GetLogin(),
+			Email:                 user.GetEmail(),
+			AccessToken:           tokenResponse.AccessToken,
+			AccessTokenExpiresAt:  &accessTokenExpiresAt,
+			RefreshToken:          tokenResponse.RefreshToken,
+			RefreshTokenExpiresAt: &refreshTokenExpiresAt,
 		}
 
+		_, err = o.userRepository.CreateOrUpdateUser(ctx, createUserParams)
+		if err != nil {
+			return err
+		}
 		args := queries.FindUserByProviderAndProviderIdParams{
 			Provider:   "GITHUB",
 			ProviderID: fmt.Sprintf("%d", user.GetID()),

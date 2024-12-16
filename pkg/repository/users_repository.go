@@ -8,8 +8,8 @@ import (
 
 type UserRepository interface {
 	FindUserByID(ctx context.Context, id int64) (queries.User, error)
-	CountUsersByProviderAndEmail(ctx context.Context, arg queries.CountUsersByProviderAndEmailParams) (int64, error)
-	CreateUser(ctx context.Context, arg queries.CreateUserParams) (queries.User, error)
+	CountUsersByProviderAndProviderId(ctx context.Context, arg queries.CountUsersByProviderAndProviderIdParams) (int64, error)
+	CreateOrUpdateUser(ctx context.Context, arg queries.CreateOrUpdateUserParams) (queries.User, error)
 	FindUserByProviderAndProviderId(ctx context.Context, arg queries.FindUserByProviderAndProviderIdParams) (queries.User, error)
 	FindExpiringTokensByProvider(ctx context.Context, arg queries.FindExpiringTokensByProviderParams) ([]queries.User, error)
 	UpdateUserTokens(ctx context.Context, arg queries.UpdateUserTokensParams) (queries.User, error)
@@ -23,12 +23,12 @@ func (r *UserRepo) FindUserByID(ctx context.Context, id int64) (queries.User, er
 	return r.db.Queries(ctx).FindUserByID(ctx, id)
 }
 
-func (r *UserRepo) CountUsersByProviderAndEmail(ctx context.Context, arg queries.CountUsersByProviderAndEmailParams) (int64, error) {
-	return r.db.Queries(ctx).CountUsersByProviderAndEmail(ctx, arg)
+func (r *UserRepo) CountUsersByProviderAndProviderId(ctx context.Context, arg queries.CountUsersByProviderAndProviderIdParams) (int64, error) {
+	return r.db.Queries(ctx).CountUsersByProviderAndProviderId(ctx, arg)
 }
 
-func (r *UserRepo) CreateUser(ctx context.Context, arg queries.CreateUserParams) (queries.User, error) {
-	return r.db.Queries(ctx).CreateUser(ctx, arg)
+func (r *UserRepo) CreateOrUpdateUser(ctx context.Context, arg queries.CreateOrUpdateUserParams) (queries.User, error) {
+	return r.db.Queries(ctx).CreateOrUpdateUser(ctx, arg)
 }
 
 func (r *UserRepo) FindUserByProviderAndProviderId(ctx context.Context, arg queries.FindUserByProviderAndProviderIdParams) (queries.User, error) {

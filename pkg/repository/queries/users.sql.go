@@ -10,32 +10,42 @@ import (
 	"time"
 )
 
-const countUsersByProviderAndEmail = `-- name: CountUsersByProviderAndEmail :one
+const countUsersByProviderAndProviderId = `-- name: CountUsersByProviderAndProviderId :one
 SELECT COUNT(*)
 FROM users
 WHERE provider = $1
-  AND email = $2
+  AND provider_id = $2
 `
 
-type CountUsersByProviderAndEmailParams struct {
-	Provider string
-	Email    string
+type CountUsersByProviderAndProviderIdParams struct {
+	Provider   string
+	ProviderID string
 }
 
-func (q *Queries) CountUsersByProviderAndEmail(ctx context.Context, arg CountUsersByProviderAndEmailParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countUsersByProviderAndEmail, arg.Provider, arg.Email)
+func (q *Queries) CountUsersByProviderAndProviderId(ctx context.Context, arg CountUsersByProviderAndProviderIdParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersByProviderAndProviderId, arg.Provider, arg.ProviderID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
-const createUser = `-- name: CreateUser :one
-INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+const createOrUpdateUser = `-- name: CreateOrUpdateUser :one
+INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token,
+                   refresh_token_expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+        $9) ON CONFLICT (provider, provider_id) DO
+UPDATE SET
+    name = $3,
+    username = $4,
+    email = $5,
+    access_token = $6,
+    access_token_expires_at = $7,
+    refresh_token = $8,
+    refresh_token_expires_at = $9
 RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
 `
 
-type CreateUserParams struct {
+type CreateOrUpdateUserParams struct {
 	Provider              string
 	ProviderID            string
 	Name                  string
@@ -47,8 +57,8 @@ type CreateUserParams struct {
 	RefreshTokenExpiresAt *time.Time
 }
 
-func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createUser,
+func (q *Queries) CreateOrUpdateUser(ctx context.Context, arg CreateOrUpdateUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createOrUpdateUser,
 		arg.Provider,
 		arg.ProviderID,
 		arg.Name,
