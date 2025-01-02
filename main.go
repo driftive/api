@@ -82,6 +82,11 @@ func main() {
 		return c.JSON(ghUser)
 	})
 
+	ghG := v1.Group("/gh")
+	ghG.Get("/orgs", func(c *fiber.Ctx) error {
+		return c.SendString("orgs")
+	})
+
 	// Start background jobs
 	go ghTokenRefresher.RefreshTokens()
 

@@ -40,8 +40,8 @@ func NewOAuthHandler(cfg config.Config, db *db.DB, userRepo repository.UserRepos
 func (o *OAuthHandler) Authenticate(c *fiber.Ctx) error {
 	state := "test_state"
 	authUrl := fmt.
-		Sprintf("https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
-			o.cfg.GithubAppConfig.ClientID, o.cfg.GithubAppConfig.CallbackURL, state)
+		Sprintf("%s/login/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
+			o.cfg.GithubAppConfig.GithubURL, o.cfg.GithubAppConfig.ClientID, o.cfg.GithubAppConfig.CallbackURL, state)
 
 	return c.Redirect(authUrl, fiber.StatusFound)
 }
@@ -130,8 +130,8 @@ func (o *OAuthHandler) ExchangeCodeForToken(oauthCode string) (*github.AccessTok
 	client := http.Client{}
 
 	ghUrl := os.Getenv("GITHUB_URL")
-	ghClientId := os.Getenv("GITHUB_APP_OAUTH_CLIENT_ID")
-	ghClientSecret := os.Getenv("GITHUB_APP_OAUTH_CLIENT_SECRET")
+	ghClientId := os.Getenv("GITHUB_APP_CLIENT_ID")
+	ghClientSecret := os.Getenv("GITHUB_APP_CLIENT_SECRET")
 
 	url := fmt.Sprintf("%s/login/oauth/access_token?client_id=%s&client_secret=%s&code=%s",
 		ghUrl, ghClientId, ghClientSecret, oauthCode)

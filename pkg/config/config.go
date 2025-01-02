@@ -64,9 +64,9 @@ func LoadConfig() (*Config, error) {
 	}
 
 	ghAppConfig := GitHubAppConfig{
-		ClientID:     os.Getenv("GITHUB_APP_OAUTH_CLIENT_ID"),
-		ClientSecret: os.Getenv("GITHUB_APP_OAUTH_CLIENT_SECRET"),
-		CallbackURL:  os.Getenv("GITHUB_APP_OAUTH_CALLBACK_URL"),
+		ClientID:     os.Getenv("GITHUB_APP_CLIENT_ID"),
+		ClientSecret: os.Getenv("GITHUB_APP_CLIENT_SECRET"),
+		CallbackURL:  os.Getenv("GITHUB_APP_CALLBACK_URL"),
 		GithubURL:    os.Getenv("GITHUB_URL"),
 	}
 

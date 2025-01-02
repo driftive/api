@@ -23,3 +23,7 @@ func NewRepository(db *db.DB, config *config.Config) Repository {
 func (r *Repository) UserRepository() UserRepository {
 	return &UserRepo{db: r.db}
 }
+
+func (r *Repository) GitOrgRepository() GitOrgRepository {
+	return &GitOrgRepo{db: r.db}
+}

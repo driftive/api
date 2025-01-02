@@ -8,6 +8,28 @@ import (
 	"time"
 )
 
+type GitOrganization struct {
+	ID         int64
+	Provider   string
+	ProviderID string
+	Name       string
+}
+
+type GitRepository struct {
+	ID             int64
+	OrganizationID int64
+	Name           string
+	AnalysisToken  string
+}
+
+type SyncStatusOrganization struct {
+	ID       int64
+	Provider string
+	UserID   int64
+	Status   string
+	SyncedAt time.Time
+}
+
 type User struct {
 	ID                    int64
 	Provider              string
@@ -19,4 +41,11 @@ type User struct {
 	AccessTokenExpiresAt  *time.Time
 	RefreshToken          string
 	RefreshTokenExpiresAt *time.Time
+}
+
+type UserOrganization struct {
+	ID                int64
+	Provider          string
+	UserID            int64
+	GitOrganizationID int64
 }
