@@ -28,13 +28,14 @@ const (
 )
 
 type OAuthHandler struct {
-	cfg            config.Config
-	db             *db.DB
-	userRepository repository.UserRepository
+	cfg                      config.Config
+	db                       *db.DB
+	userRepository           repository.UserRepository
+	syncStatusUserRepository repository.SyncStatusUserRepository
 }
 
-func NewOAuthHandler(cfg config.Config, db *db.DB, userRepo repository.UserRepository) OAuthHandler {
-	return OAuthHandler{cfg: cfg, db: db, userRepository: userRepo}
+func NewOAuthHandler(cfg config.Config, db *db.DB, userRepo repository.UserRepository, syncRepo repository.SyncStatusUserRepository) OAuthHandler {
+	return OAuthHandler{cfg: cfg, db: db, userRepository: userRepo, syncStatusUserRepository: syncRepo}
 }
 
 func (o *OAuthHandler) Authenticate(c *fiber.Ctx) error {
@@ -98,6 +99,12 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 		existingUser, err := o.userRepository.FindUserByProviderAndProviderId(ctx, args)
 		if err != nil {
 			log.Error("error finding user by provider and provider id: ", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		_, err = o.syncStatusUserRepository.CreateSyncStatusUser(ctx, existingUser.ID)
+		if err != nil {
+			log.Error("error creating sync status user: ", err)
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 

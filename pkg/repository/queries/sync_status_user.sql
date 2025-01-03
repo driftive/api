@@ -6,5 +6,5 @@ UPDATE SKIP LOCKED LIMIT 1;
 
 
 -- name: CreateSyncStatusUser :one
-INSERT INTO sync_status_user (user_id, synced_at)
-VALUES ($1, $2) RETURNING *;
+INSERT INTO sync_status_user (user_id)
+VALUES ($1) RETURNING *;

@@ -7,22 +7,15 @@ package queries
 
 import (
 	"context"
-	"time"
 )
 
 const createSyncStatusUser = `-- name: CreateSyncStatusUser :one
-INSERT INTO sync_status_user (user_id, synced_at)
-VALUES ($1, $2)
-RETURNING id, user_id, synced_at
+INSERT INTO sync_status_user (user_id)
+VALUES ($1) RETURNING id, user_id, synced_at
 `
 
-type CreateSyncStatusUserParams struct {
-	UserID   int64
-	SyncedAt time.Time
-}
-
-func (q *Queries) CreateSyncStatusUser(ctx context.Context, arg CreateSyncStatusUserParams) (SyncStatusUser, error) {
-	row := q.db.QueryRow(ctx, createSyncStatusUser, arg.UserID, arg.SyncedAt)
+func (q *Queries) CreateSyncStatusUser(ctx context.Context, userID int64) (SyncStatusUser, error) {
+	row := q.db.QueryRow(ctx, createSyncStatusUser, userID)
 	var i SyncStatusUser
 	err := row.Scan(&i.ID, &i.UserID, &i.SyncedAt)
 	return i, err

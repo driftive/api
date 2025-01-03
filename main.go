@@ -49,13 +49,14 @@ func main() {
 	userRepo := repo.UserRepository()
 	orgRepo := repo.GitOrgRepository()
 	repoRepo := repo.GitRepoRepository()
+	syncStatusUserRepo := repo.SyncStatusUserRepository()
 
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
 
 	syncer := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo)
 
 	// handlers
-	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo)
+	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
 
 	// Public routes

@@ -31,3 +31,7 @@ func (r *Repository) GitOrgRepository() GitOrgRepository {
 func (r *Repository) GitRepoRepository() GitRepositoryRepository {
 	return &GitRepoRepo{db: r.db}
 }
+
+func (r *Repository) SyncStatusUserRepository() SyncStatusUserRepository {
+	return &SyncStatusUserRepo{db: r.db}
+}
