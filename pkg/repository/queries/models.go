@@ -25,7 +25,6 @@ type GitRepository struct {
 type SyncStatusUser struct {
 	ID       int64
 	UserID   int64
-	Status   string
 	SyncedAt time.Time
 }
 

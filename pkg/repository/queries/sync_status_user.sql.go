@@ -7,10 +7,29 @@ package queries
 
 import (
 	"context"
+	"time"
 )
 
+const createSyncStatusUser = `-- name: CreateSyncStatusUser :one
+INSERT INTO sync_status_user (user_id, synced_at)
+VALUES ($1, $2)
+RETURNING id, user_id, synced_at
+`
+
+type CreateSyncStatusUserParams struct {
+	UserID   int64
+	SyncedAt time.Time
+}
+
+func (q *Queries) CreateSyncStatusUser(ctx context.Context, arg CreateSyncStatusUserParams) (SyncStatusUser, error) {
+	row := q.db.QueryRow(ctx, createSyncStatusUser, arg.UserID, arg.SyncedAt)
+	var i SyncStatusUser
+	err := row.Scan(&i.ID, &i.UserID, &i.SyncedAt)
+	return i, err
+}
+
 const findOnePendingSyncStatusUser = `-- name: FindOnePendingSyncStatusUser :one
-SELECT id, user_id, status, synced_at
+SELECT id, user_id, synced_at
 FROM sync_status_user
 WHERE synced_at < NOW() - INTERVAL '1 day' FOR
 UPDATE SKIP LOCKED LIMIT 1
@@ -19,11 +38,6 @@ UPDATE SKIP LOCKED LIMIT 1
 func (q *Queries) FindOnePendingSyncStatusUser(ctx context.Context) (SyncStatusUser, error) {
 	row := q.db.QueryRow(ctx, findOnePendingSyncStatusUser)
 	var i SyncStatusUser
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Status,
-		&i.SyncedAt,
-	)
+	err := row.Scan(&i.ID, &i.UserID, &i.SyncedAt)
 	return i, err
 }
