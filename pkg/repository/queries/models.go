@@ -22,9 +22,8 @@ type GitRepository struct {
 	AnalysisToken  string
 }
 
-type SyncStatusOrganization struct {
+type SyncStatusUser struct {
 	ID       int64
-	Provider string
 	UserID   int64
 	Status   string
 	SyncedAt time.Time

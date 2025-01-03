@@ -27,3 +27,7 @@ func (r *Repository) UserRepository() UserRepository {
 func (r *Repository) GitOrgRepository() GitOrgRepository {
 	return &GitOrgRepo{db: r.db}
 }
+
+func (r *Repository) GitRepoRepository() GitRepositoryRepository {
+	return &GitRepoRepo{db: r.db}
+}

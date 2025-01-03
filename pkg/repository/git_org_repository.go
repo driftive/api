@@ -17,7 +17,14 @@ type GitOrgRepo struct {
 
 func (g GitOrgRepo) ListGitOrganizationsByProviderAndUserID(ctx context.Context, provider string, userId int64) ([]queries.GitOrganization, error) {
 	opts := queries.FindGitOrganizationByProviderAndUserIDParams{Provider: provider, UserID: userId}
-	return g.db.Queries(ctx).FindGitOrganizationByProviderAndUserID(ctx, opts)
+	orgs, err := g.db.Queries(ctx).FindGitOrganizationByProviderAndUserID(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	if orgs == nil {
+		return []queries.GitOrganization{}, nil
+	}
+	return orgs, nil
 }
 
 func (g GitOrgRepo) CreateOrUpdateGitOrganization(ctx context.Context, arg queries.CreateOrUpdateGitOrganizationParams) (queries.GitOrganization, error) {

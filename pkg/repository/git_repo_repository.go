@@ -7,16 +7,16 @@ import (
 )
 
 type GitRepositoryRepository interface {
-	FindGitRepositoryById(ctx context.Context, id int64) (queries.GitRepository, error)
+	FindGitRepositoryByID(ctx context.Context, id int64) (queries.GitRepository, error)
 	//FindGitRepositoryByProviderAndProviderId(ctx context.Context, arg queries.FindGitRepositoryByProviderAndProviderIdParams) (queries.GitRepository, error)
 	//FindGitRepositoryByProviderAndOwnerAndName(ctx context.Context, arg queries.FindGitRepositoryByProviderAndOwnerAndNameParams) (queries.GitRepository, error)
 }
 
-type GitRepositoryRepo struct {
+type GitRepoRepo struct {
 	db *db.DB
 }
 
-func (r *GitRepositoryRepo) FindGitRepositoryByID(ctx context.Context, id int64) (queries.GitRepository, error) {
+func (r *GitRepoRepo) FindGitRepositoryByID(ctx context.Context, id int64) (queries.GitRepository, error) {
 	return r.db.Queries(ctx).FindGitRepositoryById(ctx, id)
 }
 

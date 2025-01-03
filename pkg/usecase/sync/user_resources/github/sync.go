@@ -8,6 +8,7 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/strutils"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/go-github/v67/github"
+	"time"
 )
 
 // UserResourceSyncer syncs user resources
@@ -18,8 +19,12 @@ type UserResourceSyncer struct {
 	gitRepoRepository repository.GitRepositoryRepository
 }
 
-func NewUserResourceSyncer() UserResourceSyncer {
-	return UserResourceSyncer{}
+func NewUserResourceSyncer(userRepo repository.UserRepository, gitOrgRepo repository.GitOrgRepository, repositoryRepository repository.GitRepositoryRepository) UserResourceSyncer {
+	return UserResourceSyncer{
+		userRepository:    userRepo,
+		gitOrgRepository:  gitOrgRepo,
+		gitRepoRepository: repositoryRepository,
+	}
 }
 
 func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
@@ -81,4 +86,11 @@ func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
 
 	log.Infof("successfully synced organizations for user: %d", userId)
 	return nil
+}
+
+func (s *UserResourceSyncer) StartSyncLoop() {
+	for {
+
+		time.Sleep(10 * time.Hour)
+	}
 }
