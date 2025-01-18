@@ -53,7 +53,7 @@ func main() {
 
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
 
-	syncer := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo)
+	syncer := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo)
 
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
@@ -98,7 +98,6 @@ func main() {
 
 	ghG := v1.Group("/gh")
 	ghG.Get("/orgs", func(c *fiber.Ctx) error {
-		log.Info("ListGitOrganizations")
 		return organizationHandler.ListGitOrganizations(c)
 	})
 

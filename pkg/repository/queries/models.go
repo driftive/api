@@ -9,10 +9,11 @@ import (
 )
 
 type GitOrganization struct {
-	ID         int64
-	Provider   string
-	ProviderID string
-	Name       string
+	ID             int64
+	Provider       string
+	ProviderID     string
+	Name           string
+	InstallationID *int64
 }
 
 type GitRepository struct {
@@ -26,6 +27,7 @@ type SyncStatusUser struct {
 	ID       int64
 	UserID   int64
 	SyncedAt time.Time
+	Attempts int32
 }
 
 type User struct {
@@ -41,9 +43,9 @@ type User struct {
 	RefreshTokenExpiresAt *time.Time
 }
 
-type UserOrganization struct {
+type UserGitOrganization struct {
 	ID                int64
-	Provider          string
 	UserID            int64
 	GitOrganizationID int64
+	Role              string
 }

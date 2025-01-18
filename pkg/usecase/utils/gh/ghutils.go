@@ -50,3 +50,14 @@ func NewAppGithubClient() (*github.Client, error) {
 	ghClient := github.NewClient(oauth2HttpClient)
 	return ghClient, nil
 }
+
+func ParseOrgRole(role string) string {
+	switch role {
+	case "admin":
+		return "ADMIN"
+	case "member":
+		return "MEMBER"
+	default:
+		return "MEMBER"
+	}
+}

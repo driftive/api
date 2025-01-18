@@ -14,16 +14,21 @@ import (
 // UserResourceSyncer syncs user resources
 // Organisations and Repositories
 type UserResourceSyncer struct {
-	userRepository    repository.UserRepository
-	gitOrgRepository  repository.GitOrgRepository
-	gitRepoRepository repository.GitRepositoryRepository
+	userRepository       repository.UserRepository
+	gitOrgRepository     repository.GitOrgRepository
+	gitRepoRepository    repository.GitRepositoryRepository
+	syncStatusRepository repository.SyncStatusUserRepository
 }
 
-func NewUserResourceSyncer(userRepo repository.UserRepository, gitOrgRepo repository.GitOrgRepository, repositoryRepository repository.GitRepositoryRepository) UserResourceSyncer {
+func NewUserResourceSyncer(userRepo repository.UserRepository,
+	gitOrgRepo repository.GitOrgRepository,
+	repositoryRepository repository.GitRepositoryRepository,
+	syncStatusRepository repository.SyncStatusUserRepository) UserResourceSyncer {
 	return UserResourceSyncer{
-		userRepository:    userRepo,
-		gitOrgRepository:  gitOrgRepo,
-		gitRepoRepository: repositoryRepository,
+		userRepository:       userRepo,
+		gitOrgRepository:     gitOrgRepo,
+		gitRepoRepository:    repositoryRepository,
+		syncStatusRepository: syncStatusRepository,
 	}
 }
 
@@ -64,13 +69,13 @@ func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
 
 	// Print or process the organizations
 	for _, org := range allOrgs {
-		log.Infof("Found organization: %s (ID: %d)", org.GetLogin(), org.GetID())
+		log.Infof("Found organization: %s (Provider ID: %d)", org.GetLogin(), org.GetID())
 
 		// Save organizations using the repository
 		createOrgOpts := queries.CreateOrUpdateGitOrganizationParams{
 			Provider:   "GITHUB",
 			ProviderID: strutils.Int64ToString(org.GetID()),
-			Name:       org.GetName(),
+			Name:       org.GetLogin(),
 		}
 
 		updatedOrg, err := s.gitOrgRepository.CreateOrUpdateGitOrganization(ctx, createOrgOpts)
@@ -79,9 +84,30 @@ func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
 			return err
 		}
 
-		// update membership
+		userMembership, _, err := ghClient.Organizations.GetOrgMembership(ctx, user.Username, org.GetLogin())
+		if err != nil {
+			log.Errorf("error fetching organization membership for user %s: %v", user.Username, err)
+			return err
+		}
+
+		membershipParams := queries.UpdateUserGitOrganizationMembershipParams{
+			UserID:            userId,
+			GitOrganizationID: updatedOrg.ID,
+			Role:              gh.ParseOrgRole(*userMembership.Role),
+		}
+		err = s.gitOrgRepository.UpdateUserGitOrganizationMembership(ctx, membershipParams)
+		if err != nil {
+			log.Errorf("error updating user membership for organization: %v", err)
+			return err
+		}
 
 		log.Infof("successfully saved organization: %s", updatedOrg.Name)
+	}
+
+	log.Infof("updating sync status for user: %d", userId)
+	_, err = s.syncStatusRepository.UpdateSyncStatusUserLastSyncedAt(ctx, userId)
+	if err != nil {
+		log.Errorf("error updating sync status for user: %v", err)
 	}
 
 	log.Infof("successfully synced organizations for user: %d", userId)
@@ -90,7 +116,21 @@ func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
 
 func (s *UserResourceSyncer) StartSyncLoop() {
 	for {
+		ctx := context.Background()
 
-		time.Sleep(10 * time.Hour)
+		result, err := s.syncStatusRepository.FindOnePendingSyncStatusUser(ctx)
+		if err != nil {
+			log.Errorf("error finding pending sync status user: %v", err)
+		}
+
+		if result.ID != 0 {
+			err = s.SyncUserResources(result.UserID)
+			if err != nil {
+				log.Errorf("error syncing user resources: %v", err)
+			}
+		} else {
+			log.Info("no pending sync status user found")
+			time.Sleep(10 * time.Hour)
+		}
 	}
 }

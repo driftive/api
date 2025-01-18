@@ -7,6 +7,7 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/fiberutils"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
 )
 
 type GitOrganizationHandler struct {
@@ -25,6 +26,7 @@ func NewGitOrganizationHandler(cfg config.Config, db *db.DB, orgRepo repository.
 
 func (h *GitOrganizationHandler) ListGitOrganizations(c *fiber.Ctx) error {
 	userId := fiberutils.GetUserId(c)
+	log.Infof("fetching organizations for user: %d", userId)
 	orgs, err := h.gitOrgRepository.ListGitOrganizationsByProviderAndUserID(c.Context(), "GITHUB", userId)
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)

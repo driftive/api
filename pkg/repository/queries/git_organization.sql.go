@@ -11,9 +11,12 @@ import (
 
 const createOrUpdateGitOrganization = `-- name: CreateOrUpdateGitOrganization :one
 INSERT INTO git_organization (provider, provider_id, name)
-VALUES ($1, $2, $3) ON CONFLICT (provider, provider_id) DO
-UPDATE SET provider = $1, provider_id = $2, name = $3
-    RETURNING id, provider, provider_id, name
+VALUES ($1, $2, $3)
+ON CONFLICT (provider, provider_id) DO UPDATE
+    SET provider    = $1,
+        provider_id = $2,
+        name        = $3
+RETURNING id, provider, provider_id, name, installation_id
 `
 
 type CreateOrUpdateGitOrganizationParams struct {
@@ -30,12 +33,13 @@ func (q *Queries) CreateOrUpdateGitOrganization(ctx context.Context, arg CreateO
 		&i.Provider,
 		&i.ProviderID,
 		&i.Name,
+		&i.InstallationID,
 	)
 	return i, err
 }
 
 const findGitOrganizationByID = `-- name: FindGitOrganizationByID :one
-SELECT id, provider, provider_id, name
+SELECT id, provider, provider_id, name, installation_id
 FROM git_organization
 WHERE id = $1
 `
@@ -48,12 +52,13 @@ func (q *Queries) FindGitOrganizationByID(ctx context.Context, id int64) (GitOrg
 		&i.Provider,
 		&i.ProviderID,
 		&i.Name,
+		&i.InstallationID,
 	)
 	return i, err
 }
 
 const findGitOrganizationByProviderAndName = `-- name: FindGitOrganizationByProviderAndName :one
-SELECT id, provider, provider_id, name
+SELECT id, provider, provider_id, name, installation_id
 FROM git_organization
 WHERE provider = $1
   AND name = $2
@@ -72,15 +77,16 @@ func (q *Queries) FindGitOrganizationByProviderAndName(ctx context.Context, arg 
 		&i.Provider,
 		&i.ProviderID,
 		&i.Name,
+		&i.InstallationID,
 	)
 	return i, err
 }
 
 const findGitOrganizationByProviderAndUserID = `-- name: FindGitOrganizationByProviderAndUserID :many
-SELECT go.id, go.provider, go.provider_id, go.name
+SELECT go.id, go.provider, go.provider_id, go.name, go.installation_id
 FROM git_organization go
-JOIN user_organization uo
-ON go.id = uo.git_organization_id
+         JOIN user_git_organization uo
+              ON go.id = uo.git_organization_id
 WHERE go.provider = $1
   AND uo.user_id = $2
 `
@@ -104,6 +110,7 @@ func (q *Queries) FindGitOrganizationByProviderAndUserID(ctx context.Context, ar
 			&i.Provider,
 			&i.ProviderID,
 			&i.Name,
+			&i.InstallationID,
 		); err != nil {
 			return nil, err
 		}
@@ -113,4 +120,22 @@ func (q *Queries) FindGitOrganizationByProviderAndUserID(ctx context.Context, ar
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateUserGitOrganizationMembership = `-- name: UpdateUserGitOrganizationMembership :exec
+INSERT INTO user_git_organization (user_id, git_organization_id, role)
+VALUES ($1, $2, $3)
+ON CONFLICT (user_id, git_organization_id) DO UPDATE
+    SET role = $3
+`
+
+type UpdateUserGitOrganizationMembershipParams struct {
+	UserID            int64
+	GitOrganizationID int64
+	Role              string
+}
+
+func (q *Queries) UpdateUserGitOrganizationMembership(ctx context.Context, arg UpdateUserGitOrganizationMembershipParams) error {
+	_, err := q.db.Exec(ctx, updateUserGitOrganizationMembership, arg.UserID, arg.GitOrganizationID, arg.Role)
+	return err
 }
