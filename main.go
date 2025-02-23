@@ -7,6 +7,7 @@ import (
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/auth/github"
 	"driftive.cloud/api/pkg/usecase/orgs"
+	github3 "driftive.cloud/api/pkg/usecase/sync/org/github"
 	github2 "driftive.cloud/api/pkg/usecase/sync/user_resources/github"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	jwtware "github.com/gofiber/contrib/jwt"
@@ -15,6 +16,7 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
+	"strconv"
 )
 
 func main() {
@@ -50,6 +52,8 @@ func main() {
 	orgRepo := repo.GitOrgRepository()
 	repoRepo := repo.GitRepoRepository()
 	syncStatusUserRepo := repo.SyncStatusUserRepository()
+
+	orgSync := github3.NewSyncOrganization(orgRepo)
 
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
 
@@ -100,6 +104,20 @@ func main() {
 	ghG.Get("/orgs", func(c *fiber.Ctx) error {
 		return organizationHandler.ListGitOrganizations(c)
 	})
+
+	ghG.Get("/orgs/install", func(c *fiber.Ctx) error {
+		log.Info("syncing org by id")
+		orgIdStr := c.Query("org_id")
+		orgIdInt64, err := strconv.ParseInt(orgIdStr, 10, 64)
+		if err != nil {
+			log.Error("error parsing org_id. ", err)
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+		go orgSync.SyncById(orgIdInt64)
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	//http://localhost:3000/success?installation_id=59132304&setup_action=install
 
 	// Start background jobs
 	go ghTokenRefresher.RefreshTokens()

@@ -4,6 +4,7 @@ CREATE TABLE git_organization
     provider        VARCHAR(255) NOT NULL,
     provider_id     VARCHAR(255) NOT NULL CHECK (provider_id != '0'),
     name            VARCHAR(255) NOT NULL,
+    avatar_url      VARCHAR,
     installation_id BIGINT
 );
 

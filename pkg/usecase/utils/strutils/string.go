@@ -13,3 +13,17 @@ func StringToInt64(str string) int64 {
 func Int64ToString(i int64) string {
 	return strconv.FormatInt(i, 10)
 }
+
+func OrEmpty(str *string) string {
+	if str == nil {
+		return ""
+	}
+	return *str
+}
+
+func OrNil(str string) *string {
+	if str == "" {
+		return nil
+	}
+	return &str
+}

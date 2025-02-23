@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"database/sql"
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/model/auth"
@@ -66,7 +67,7 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	log.Info("gh user: ", user)
+	log.Debug("gh user: ", user)
 
 	err = o.db.WithTx(ctx, func(ctx context.Context) error {
 		if err != nil {
@@ -102,10 +103,12 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 
-		_, err = o.syncStatusUserRepository.CreateSyncStatusUser(ctx, existingUser.ID)
+		_, err = o.syncStatusUserRepository.CreateOrUpdateSyncStatusUser(ctx, existingUser.ID)
 		if err != nil {
-			log.Error("error creating sync status user: ", err)
-			return c.SendStatus(fiber.StatusInternalServerError)
+			if !errors.Is(err, sql.ErrNoRows) {
+				log.Error("error creating sync status user: ", err)
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
 		}
 
 		userToken := auth.UserToken{

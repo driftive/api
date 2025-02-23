@@ -4,6 +4,7 @@ import (
 	"context"
 	"driftive.cloud/api/pkg/repository"
 	"encoding/base64"
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/go-github/v67/github"
 	"github.com/jferrl/go-githubauth"
 	"golang.org/x/oauth2"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func NewDefaultGithubClient(token string) *github.Client {
@@ -41,8 +43,9 @@ func NewAppGithubClient() (*github.Client, error) {
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(ghAppPrivateKeyBase64))
 	privateKey, _ := io.ReadAll(decoder)
 
-	appTokenSource, err := githubauth.NewApplicationTokenSource(appID, privateKey)
+	appTokenSource, err := githubauth.NewApplicationTokenSource(appID, privateKey, githubauth.WithApplicationTokenExpiration(5*time.Minute))
 	if err != nil {
+		log.Error("error creating app token source: ", err)
 		return nil, err
 	}
 

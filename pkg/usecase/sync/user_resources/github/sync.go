@@ -2,10 +2,12 @@ package github
 
 import (
 	"context"
+	"database/sql"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	"driftive.cloud/api/pkg/usecase/utils/strutils"
+	"errors"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/go-github/v67/github"
 	"time"
@@ -32,9 +34,7 @@ func NewUserResourceSyncer(userRepo repository.UserRepository,
 	}
 }
 
-func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
-	ctx := context.Background()
-
+func (s *UserResourceSyncer) SyncUserResources(ctx context.Context, userId int64) error {
 	log.Info("syncing user resources for user: ", userId)
 
 	user, err := s.userRepository.FindUserByID(ctx, userId)
@@ -76,6 +76,7 @@ func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
 			Provider:   "GITHUB",
 			ProviderID: strutils.Int64ToString(org.GetID()),
 			Name:       org.GetLogin(),
+			AvatarUrl:  strutils.OrNil(org.GetAvatarURL()),
 		}
 
 		updatedOrg, err := s.gitOrgRepository.CreateOrUpdateGitOrganization(ctx, createOrgOpts)
@@ -117,20 +118,28 @@ func (s *UserResourceSyncer) SyncUserResources(userId int64) error {
 func (s *UserResourceSyncer) StartSyncLoop() {
 	for {
 		ctx := context.Background()
-
-		result, err := s.syncStatusRepository.FindOnePendingSyncStatusUser(ctx)
-		if err != nil {
-			log.Errorf("error finding pending sync status user: %v", err)
-		}
-
-		if result.ID != 0 {
-			err = s.SyncUserResources(result.UserID)
+		err := s.syncStatusRepository.WithTx(ctx, func(ctx context.Context) error {
+			result, err := s.syncStatusRepository.FindOnePendingSyncStatusUser(ctx)
 			if err != nil {
-				log.Errorf("error syncing user resources: %v", err)
+				if !errors.Is(err, sql.ErrNoRows) {
+					log.Errorf("error finding pending sync status user: %v", err)
+				}
 			}
-		} else {
-			log.Info("no pending sync status user found")
-			time.Sleep(10 * time.Hour)
+
+			if result.ID != 0 {
+				err = s.SyncUserResources(ctx, result.UserID)
+				if err != nil {
+					log.Errorf("error syncing user resources: %v", err)
+				}
+			} else {
+				log.Debug("no pending sync status user found")
+				time.Sleep(5 * time.Second)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Errorf("error handling sync transaction: %v", err)
 		}
+
 	}
 }
