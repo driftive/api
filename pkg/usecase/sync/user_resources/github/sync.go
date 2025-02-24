@@ -6,6 +6,7 @@ import (
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
+	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"driftive.cloud/api/pkg/usecase/utils/strutils"
 	"errors"
 	"github.com/gofiber/fiber/v2/log"
@@ -74,7 +75,7 @@ func (s *UserResourceSyncer) SyncUserResources(ctx context.Context, userId int64
 		// Save organizations using the repository
 		createOrgOpts := queries.CreateOrUpdateGitOrganizationParams{
 			Provider:   "GITHUB",
-			ProviderID: strutils.Int64ToString(org.GetID()),
+			ProviderID: parsing.Int64ToString(org.GetID()),
 			Name:       org.GetLogin(),
 			AvatarUrl:  strutils.OrNil(org.GetAvatarURL()),
 		}

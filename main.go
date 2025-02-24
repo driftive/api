@@ -53,7 +53,7 @@ func main() {
 	repoRepo := repo.GitRepoRepository()
 	syncStatusUserRepo := repo.SyncStatusUserRepository()
 
-	orgSync := github3.NewSyncOrganization(orgRepo)
+	orgSync := github3.NewSyncOrganization(orgRepo, repoRepo)
 
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
 
@@ -113,7 +113,19 @@ func main() {
 			log.Error("error parsing org_id. ", err)
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
-		go orgSync.SyncById(orgIdInt64)
+		go orgSync.SyncInstallationIdByOrgId(orgIdInt64)
+		return c.SendStatus(fiber.StatusOK)
+	})
+
+	ghG.Get("/orgs/sync", func(c *fiber.Ctx) error {
+		log.Info("syncing org by id")
+		orgIdStr := c.Query("org_id")
+		orgIdInt64, err := strconv.ParseInt(orgIdStr, 10, 64)
+		if err != nil {
+			log.Error("error parsing org_id. ", err)
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+		go orgSync.SyncOrganizationRepositories(orgIdInt64)
 		return c.SendStatus(fiber.StatusOK)
 	})
 

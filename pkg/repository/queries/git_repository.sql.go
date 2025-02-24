@@ -9,8 +9,35 @@ import (
 	"context"
 )
 
+const createOrUpdateRepository = `-- name: CreateOrUpdateRepository :one
+INSERT INTO git_repository (organization_id, provider_id, name)
+VALUES ($1, $2, $3)
+ON CONFLICT (organization_id, provider_id) DO UPDATE
+    SET name = $3
+RETURNING id, organization_id, provider_id, name, analysis_token
+`
+
+type CreateOrUpdateRepositoryParams struct {
+	OrganizationID int64
+	ProviderID     string
+	Name           string
+}
+
+func (q *Queries) CreateOrUpdateRepository(ctx context.Context, arg CreateOrUpdateRepositoryParams) (GitRepository, error) {
+	row := q.db.QueryRow(ctx, createOrUpdateRepository, arg.OrganizationID, arg.ProviderID, arg.Name)
+	var i GitRepository
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ProviderID,
+		&i.Name,
+		&i.AnalysisToken,
+	)
+	return i, err
+}
+
 const findGitRepositoryById = `-- name: FindGitRepositoryById :one
-SELECT id, organization_id, name, analysis_token
+SELECT id, organization_id, provider_id, name, analysis_token
 FROM git_repository
 WHERE id = $1
 `
@@ -21,6 +48,7 @@ func (q *Queries) FindGitRepositoryById(ctx context.Context, id int64) (GitRepos
 	err := row.Scan(
 		&i.ID,
 		&i.OrganizationID,
+		&i.ProviderID,
 		&i.Name,
 		&i.AnalysisToken,
 	)

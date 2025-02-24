@@ -36,6 +36,26 @@ func NewUserGithubClient(ctx context.Context, userId int64, usersRepository repo
 	return NewDefaultGithubClient(user.AccessToken), nil
 }
 
+func NewAppGithubInstallationClient(installationId int64) (*github.Client, error) {
+	ghAppPrivateKeyBase64 := os.Getenv("GITHUB_APP_PRIVATE_KEY_BASE64")
+	appID, _ := strconv.ParseInt(os.Getenv("GITHUB_APP_ID"), 10, 64)
+
+	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(ghAppPrivateKeyBase64))
+	privateKey, _ := io.ReadAll(decoder)
+
+	appTokenSource, err := githubauth.NewApplicationTokenSource(appID, privateKey)
+	if err != nil {
+		log.Error("error creating app token source: ", err)
+		return nil, err
+	}
+
+	installationTokenSource := githubauth.NewInstallationTokenSource(installationId, appTokenSource)
+
+	oauth2HttpClient := oauth2.NewClient(context.Background(), installationTokenSource)
+	ghClient := github.NewClient(oauth2HttpClient)
+	return ghClient, nil
+}
+
 func NewAppGithubClient() (*github.Client, error) {
 	ghAppPrivateKeyBase64 := os.Getenv("GITHUB_APP_PRIVATE_KEY_BASE64")
 	appID, _ := strconv.ParseInt(os.Getenv("GITHUB_APP_ID"), 10, 64)

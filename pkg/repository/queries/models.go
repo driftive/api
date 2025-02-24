@@ -20,8 +20,9 @@ type GitOrganization struct {
 type GitRepository struct {
 	ID             int64
 	OrganizationID int64
+	ProviderID     string
 	Name           string
-	AnalysisToken  string
+	AnalysisToken  *string
 }
 
 type SyncStatusUser struct {
