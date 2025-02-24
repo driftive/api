@@ -12,6 +12,7 @@ type GitOrgRepository interface {
 	UpdateUserGitOrganizationMembership(ctx context.Context, arg queries.UpdateUserGitOrganizationMembershipParams) error
 	FindGitOrgById(ctx context.Context, id int64) (queries.GitOrganization, error)
 	UpdateOrgInstallationID(ctx context.Context, orgId int64, installationId *int64) error
+	FindGitOrgByProviderAndName(ctx context.Context, provider, name string) (queries.GitOrganization, error)
 }
 
 type GitOrgRepo struct {
@@ -45,4 +46,9 @@ func (g GitOrgRepo) FindGitOrgById(ctx context.Context, id int64) (queries.GitOr
 func (g GitOrgRepo) UpdateOrgInstallationID(ctx context.Context, orgId int64, installationId *int64) error {
 	params := queries.UpdateOrgInstallationIDParams{ID: orgId, InstallationID: installationId}
 	return g.db.Queries(ctx).UpdateOrgInstallationID(ctx, params)
+}
+
+func (g GitOrgRepo) FindGitOrgByProviderAndName(ctx context.Context, provider, name string) (queries.GitOrganization, error) {
+	opts := queries.FindGitOrganizationByProviderAndNameParams{Provider: provider, Name: name}
+	return g.db.Queries(ctx).FindGitOrganizationByProviderAndName(ctx, opts)
 }

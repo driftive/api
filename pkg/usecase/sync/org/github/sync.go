@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"driftive.cloud/api/pkg/repository"
+	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"github.com/gofiber/fiber/v2/log"
@@ -71,12 +72,20 @@ func (so SyncOrganization) SyncOrganizationRepositories(orgId int64) {
 
 	for _, repo := range allRepos {
 		log.Info("repo: ", repo.Name)
-		repo, err := so.repoRepository.CreateOrUpdateRepository(ctx, orgId, parsing.Int64ToString(repo.GetID()), repo.GetName())
+
+		params := queries.CreateOrUpdateRepositoryParams{
+			OrganizationID: orgId,
+			ProviderID:     parsing.Int64ToString(repo.GetID()),
+			Name:           repo.GetName(),
+			IsPrivate:      repo.GetPrivate(),
+		}
+
+		updatedRepo, err := so.repoRepository.CreateOrUpdateRepository(ctx, params)
 		if err != nil {
 			log.Error("error creating or updating repo: ", err)
 			continue
 		}
-		log.Info("repo synced: ", repo.Name)
+		log.Info("repo synced: ", updatedRepo.Name)
 	}
 
 	log.Info("repos: ", allRepos)

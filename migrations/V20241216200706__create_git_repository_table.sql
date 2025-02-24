@@ -4,6 +4,7 @@ CREATE TABLE git_repository
     organization_id BIGINT       NOT NULL REFERENCES git_organization (id),
     provider_id     VARCHAR      NOT NULL,
     name            VARCHAR(255) NOT NULL,
+    is_private      BOOLEAN      NOT NULL,
     analysis_token  VARCHAR(255)
 );
 

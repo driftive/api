@@ -10,34 +10,75 @@ import (
 )
 
 const createOrUpdateRepository = `-- name: CreateOrUpdateRepository :one
-INSERT INTO git_repository (organization_id, provider_id, name)
-VALUES ($1, $2, $3)
+INSERT INTO git_repository (organization_id, provider_id, name, is_private)
+VALUES ($1, $2, $3, $4)
 ON CONFLICT (organization_id, provider_id) DO UPDATE
-    SET name = $3
-RETURNING id, organization_id, provider_id, name, analysis_token
+    SET name       = $3,
+        is_private = $4
+RETURNING id, organization_id, provider_id, name, is_private, analysis_token
 `
 
 type CreateOrUpdateRepositoryParams struct {
 	OrganizationID int64
 	ProviderID     string
 	Name           string
+	IsPrivate      bool
 }
 
 func (q *Queries) CreateOrUpdateRepository(ctx context.Context, arg CreateOrUpdateRepositoryParams) (GitRepository, error) {
-	row := q.db.QueryRow(ctx, createOrUpdateRepository, arg.OrganizationID, arg.ProviderID, arg.Name)
+	row := q.db.QueryRow(ctx, createOrUpdateRepository,
+		arg.OrganizationID,
+		arg.ProviderID,
+		arg.Name,
+		arg.IsPrivate,
+	)
 	var i GitRepository
 	err := row.Scan(
 		&i.ID,
 		&i.OrganizationID,
 		&i.ProviderID,
 		&i.Name,
+		&i.IsPrivate,
 		&i.AnalysisToken,
 	)
 	return i, err
 }
 
+const findGitRepositoriesByOrgId = `-- name: FindGitRepositoriesByOrgId :many
+SELECT id, organization_id, provider_id, name, is_private, analysis_token
+FROM git_repository
+WHERE organization_id = $1
+`
+
+func (q *Queries) FindGitRepositoriesByOrgId(ctx context.Context, organizationID int64) ([]GitRepository, error) {
+	rows, err := q.db.Query(ctx, findGitRepositoriesByOrgId, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GitRepository
+	for rows.Next() {
+		var i GitRepository
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.ProviderID,
+			&i.Name,
+			&i.IsPrivate,
+			&i.AnalysisToken,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findGitRepositoryById = `-- name: FindGitRepositoryById :one
-SELECT id, organization_id, provider_id, name, analysis_token
+SELECT id, organization_id, provider_id, name, is_private, analysis_token
 FROM git_repository
 WHERE id = $1
 `
@@ -50,7 +91,53 @@ func (q *Queries) FindGitRepositoryById(ctx context.Context, id int64) (GitRepos
 		&i.OrganizationID,
 		&i.ProviderID,
 		&i.Name,
+		&i.IsPrivate,
 		&i.AnalysisToken,
 	)
 	return i, err
+}
+
+const findGitRepositoryByOrgIdAndName = `-- name: FindGitRepositoryByOrgIdAndName :one
+SELECT id, organization_id, provider_id, name, is_private, analysis_token
+FROM git_repository
+WHERE organization_id = $1
+  AND name = $2
+`
+
+type FindGitRepositoryByOrgIdAndNameParams struct {
+	OrganizationID int64
+	Name           string
+}
+
+func (q *Queries) FindGitRepositoryByOrgIdAndName(ctx context.Context, arg FindGitRepositoryByOrgIdAndNameParams) (GitRepository, error) {
+	row := q.db.QueryRow(ctx, findGitRepositoryByOrgIdAndName, arg.OrganizationID, arg.Name)
+	var i GitRepository
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ProviderID,
+		&i.Name,
+		&i.IsPrivate,
+		&i.AnalysisToken,
+	)
+	return i, err
+}
+
+const updateRepositoryToken = `-- name: UpdateRepositoryToken :one
+UPDATE git_repository
+SET analysis_token = $1
+WHERE id = $2
+RETURNING analysis_token
+`
+
+type UpdateRepositoryTokenParams struct {
+	Token *string
+	ID    int64
+}
+
+func (q *Queries) UpdateRepositoryToken(ctx context.Context, arg UpdateRepositoryTokenParams) (*string, error) {
+	row := q.db.QueryRow(ctx, updateRepositoryToken, arg.Token, arg.ID)
+	var analysis_token *string
+	err := row.Scan(&analysis_token)
+	return analysis_token, err
 }

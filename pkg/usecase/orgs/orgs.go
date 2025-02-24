@@ -3,6 +3,7 @@ package orgs
 import (
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
+	"driftive.cloud/api/pkg/model"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/utils/fiberutils"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
@@ -32,4 +33,27 @@ func (h *GitOrganizationHandler) ListGitOrganizations(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 	return c.JSON(parsing.ToOrganizationDTOs(orgs))
+}
+
+func (h *GitOrganizationHandler) GetOrgByNameAndProvider(c *fiber.Ctx, provider model.GitProvider) error {
+	orgName := c.Query("org_name")
+	if orgName == "" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	switch provider {
+	case model.GitHubProvider:
+		org, err := h.gitOrgRepository.FindGitOrgByProviderAndName(c.Context(), "GITHUB", orgName)
+
+		// FIXME check if user has permission
+
+		if err != nil {
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		return c.JSON(parsing.ToOrganizationDTO(org))
+	default:
+		break
+	}
+	return c.SendStatus(fiber.StatusNotImplemented)
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
+	"driftive.cloud/api/pkg/model"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/auth/github"
 	"driftive.cloud/api/pkg/usecase/orgs"
+	"driftive.cloud/api/pkg/usecase/repos"
 	github3 "driftive.cloud/api/pkg/usecase/sync/org/github"
 	github2 "driftive.cloud/api/pkg/usecase/sync/user_resources/github"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
@@ -62,6 +64,7 @@ func main() {
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
+	repositoryHandler := repos.NewGitRepositoryHandler(userRepo, repoRepo)
 
 	// Public routes
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -105,6 +108,10 @@ func main() {
 		return organizationHandler.ListGitOrganizations(c)
 	})
 
+	ghG.Get("/org", func(c *fiber.Ctx) error {
+		return organizationHandler.GetOrgByNameAndProvider(c, model.GitHubProvider)
+	})
+
 	ghG.Get("/orgs/install", func(c *fiber.Ctx) error {
 		log.Info("syncing org by id")
 		orgIdStr := c.Query("org_id")
@@ -129,8 +136,21 @@ func main() {
 		return c.SendStatus(fiber.StatusOK)
 	})
 
-	//http://localhost:3000/success?installation_id=59132304&setup_action=install
+	ghG.Get("/org/:org_id/repos", func(c *fiber.Ctx) error {
+		return repositoryHandler.ListOrganizationRepos(c)
+	})
 
+	ghG.Get("/org/:org_id/repo", func(c *fiber.Ctx) error {
+		return repositoryHandler.GetRepoByOrgIdAndName(c)
+	})
+
+	ghG.Get("/repo/:repo_id/token", func(c *fiber.Ctx) error {
+		return repositoryHandler.GetRepoTokenById(c)
+	})
+
+	ghG.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error {
+		return repositoryHandler.RegenerateToken(c)
+	})
 	// Start background jobs
 	go ghTokenRefresher.RefreshTokens()
 	go syncer.StartSyncLoop()

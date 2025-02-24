@@ -22,6 +22,7 @@ type GitRepository struct {
 	OrganizationID int64
 	ProviderID     string
 	Name           string
+	IsPrivate      bool
 	AnalysisToken  *string
 }
 
