@@ -7,6 +7,7 @@ import (
 	"driftive.cloud/api/pkg/model"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/auth/github"
+	"driftive.cloud/api/pkg/usecase/drift_stream"
 	"driftive.cloud/api/pkg/usecase/orgs"
 	"driftive.cloud/api/pkg/usecase/repos"
 	github3 "driftive.cloud/api/pkg/usecase/sync/org/github"
@@ -54,6 +55,7 @@ func main() {
 	orgRepo := repo.GitOrgRepository()
 	repoRepo := repo.GitRepoRepository()
 	syncStatusUserRepo := repo.SyncStatusUserRepository()
+	driftRepo := repo.DriftAnalysisReepository()
 
 	orgSync := github3.NewSyncOrganization(orgRepo, repoRepo)
 
@@ -65,6 +67,7 @@ func main() {
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
 	repositoryHandler := repos.NewGitRepositoryHandler(userRepo, repoRepo)
+	driftStateHandler := drift_stream.NewDriftStateHandler(repoRepo, driftRepo)
 
 	// Public routes
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -75,6 +78,10 @@ func main() {
 	})
 	v1.Get("/auth/github/callback", func(c *fiber.Ctx) error {
 		return ghOAuthHandler.Callback(c)
+	})
+
+	v1.Post("/drift_analysis", func(c *fiber.Ctx) error {
+		return driftStateHandler.HandleUpdate(c)
 	})
 
 	app.Use(jwtware.New(jwtware.Config{
@@ -151,6 +158,11 @@ func main() {
 	ghG.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error {
 		return repositoryHandler.RegenerateToken(c)
 	})
+
+	ghG.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error {
+		return driftStateHandler.ListRunsByRepoId(c)
+	})
+
 	// Start background jobs
 	go ghTokenRefresher.RefreshTokens()
 	go syncer.StartSyncLoop()

@@ -4,15 +4,15 @@ import (
 	"context"
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/repository/queries"
-	"github.com/valyala/fasthttp"
 )
 
 type GitRepositoryRepository interface {
 	FindGitRepositoryById(ctx context.Context, id int64) (queries.GitRepository, error)
 	CreateOrUpdateRepository(ctx context.Context, params queries.CreateOrUpdateRepositoryParams) (queries.GitRepository, error)
 	FindGitReposByOrgId(ctx context.Context, orgId int64) ([]queries.GitRepository, error)
-	FindGitRepositoryByOrgIdAndName(ctx *fasthttp.RequestCtx, orgId int64, repoName string) (queries.GitRepository, error)
+	FindGitRepositoryByOrgIdAndName(ctx context.Context, orgId int64, repoName string) (queries.GitRepository, error)
 	UpdateRepositoryToken(ctx context.Context, params queries.UpdateRepositoryTokenParams) (*string, error)
+	FindGitRepositoryByToken(ctx context.Context, token string) (queries.GitRepository, error)
 }
 
 type GitRepoRepo struct {
@@ -31,7 +31,7 @@ func (r *GitRepoRepo) FindGitReposByOrgId(ctx context.Context, orgId int64) ([]q
 	return r.db.Queries(ctx).FindGitRepositoriesByOrgId(ctx, orgId)
 }
 
-func (r *GitRepoRepo) FindGitRepositoryByOrgIdAndName(ctx *fasthttp.RequestCtx, orgId int64, repoName string) (queries.GitRepository, error) {
+func (r *GitRepoRepo) FindGitRepositoryByOrgIdAndName(ctx context.Context, orgId int64, repoName string) (queries.GitRepository, error) {
 	params := queries.FindGitRepositoryByOrgIdAndNameParams{
 		OrganizationID: orgId,
 		Name:           repoName,
@@ -41,4 +41,8 @@ func (r *GitRepoRepo) FindGitRepositoryByOrgIdAndName(ctx *fasthttp.RequestCtx, 
 
 func (r *GitRepoRepo) UpdateRepositoryToken(ctx context.Context, params queries.UpdateRepositoryTokenParams) (*string, error) {
 	return r.db.Queries(ctx).UpdateRepositoryToken(ctx, params)
+}
+
+func (r *GitRepoRepo) FindGitRepositoryByToken(ctx context.Context, token string) (queries.GitRepository, error) {
+	return r.db.Queries(ctx).FindGitRepositoryByToken(ctx, &token)
 }

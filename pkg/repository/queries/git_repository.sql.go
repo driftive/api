@@ -123,6 +123,28 @@ func (q *Queries) FindGitRepositoryByOrgIdAndName(ctx context.Context, arg FindG
 	return i, err
 }
 
+const findGitRepositoryByToken = `-- name: FindGitRepositoryByToken :one
+SELECT id, organization_id, provider_id, name, is_private, analysis_token
+FROM git_repository
+WHERE analysis_token = $1
+  AND analysis_token IS NOT NULL
+  AND analysis_token != ''
+`
+
+func (q *Queries) FindGitRepositoryByToken(ctx context.Context, analysisToken *string) (GitRepository, error) {
+	row := q.db.QueryRow(ctx, findGitRepositoryByToken, analysisToken)
+	var i GitRepository
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.ProviderID,
+		&i.Name,
+		&i.IsPrivate,
+		&i.AnalysisToken,
+	)
+	return i, err
+}
+
 const updateRepositoryToken = `-- name: UpdateRepositoryToken :one
 UPDATE git_repository
 SET analysis_token = $1

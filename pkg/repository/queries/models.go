@@ -6,7 +6,30 @@ package queries
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type DriftAnalysisProject struct {
+	ID                 int64
+	DriftAnalysisRunID uuid.UUID
+	Dir                string
+	Type               string
+	Drifted            bool
+	Succeeded          bool
+	InitOutput         *string
+	PlanOutput         *string
+}
+
+type DriftAnalysisRun struct {
+	Uuid                   uuid.UUID
+	RepositoryID           int64
+	TotalProjects          int32
+	TotalProjectsDrifted   int32
+	AnalysisDurationMillis int64
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+}
 
 type GitOrganization struct {
 	ID             int64

@@ -23,4 +23,7 @@ overrides:
         go_type: "time.Time"
         nullable: false
         engine: postgresql
-
+      - db_type: "uuid"
+        go_type: "github.com/google/uuid.UUID"
+        nullable: false
+        engine: postgresql

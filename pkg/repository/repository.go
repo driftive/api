@@ -35,3 +35,7 @@ func (r *Repository) GitRepoRepository() GitRepositoryRepository {
 func (r *Repository) SyncStatusUserRepository() SyncStatusUserRepository {
 	return &SyncStatusUserRepo{db: r.db}
 }
+
+func (r *Repository) DriftAnalysisReepository() DriftAnalysisRepository {
+	return &DriftAnalysisRepo{db: r.db}
+}
