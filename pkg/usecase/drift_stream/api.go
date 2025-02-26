@@ -130,3 +130,31 @@ func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
 	runsDTO := parsing.ToDriftAnalysisRunDTOs(runs)
 	return c.JSON(runsDTO)
 }
+
+func (d *DriftStateHandler) GetRunById(c *fiber.Ctx) error {
+	runIdStr := c.Params("run_id")
+	if runIdStr == "" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	runId, err := uuid.Parse(runIdStr)
+	if err != nil {
+		log.Errorf("Error parsing run ID: %v", err)
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	run, err := d.driftAnalysisRepository.FindDriftAnalysisRunByUUID(c.Context(), runId)
+	if err != nil {
+		log.Errorf("Error finding drift analysis run by ID: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	projects, err := d.driftAnalysisRepository.FindDriftAnalysisProjectsByRunId(c.Context(), runId)
+	if err != nil {
+		log.Errorf("Error finding drift analysis projects by run ID: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	runDTO := parsing.ToDriftAnalysisRunWithProjectsDTO(run, projects)
+	return c.JSON(runDTO)
+}

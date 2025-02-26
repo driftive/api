@@ -12,4 +12,15 @@ RETURNING *;
 SELECT *
 FROM drift_analysis_run
 WHERE repository_id = @repository_id
+ORDER BY created_at DESC
 OFFSET @queryOffset LIMIT @maxResults;
+
+-- name: FindDriftAnalysisRunByUUID :one
+SELECT *
+FROM drift_analysis_run
+WHERE uuid = @uuid;
+
+-- name: FindDriftAnalysisProjectsByRunId :many
+SELECT *
+FROM drift_analysis_project
+WHERE drift_analysis_run_id = @drift_analysis_run_id;

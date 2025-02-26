@@ -86,10 +86,67 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 	return i, err
 }
 
+const findDriftAnalysisProjectsByRunId = `-- name: FindDriftAnalysisProjectsByRunId :many
+SELECT id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output
+FROM drift_analysis_project
+WHERE drift_analysis_run_id = $1
+`
+
+func (q *Queries) FindDriftAnalysisProjectsByRunId(ctx context.Context, driftAnalysisRunID uuid.UUID) ([]DriftAnalysisProject, error) {
+	rows, err := q.db.Query(ctx, findDriftAnalysisProjectsByRunId, driftAnalysisRunID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DriftAnalysisProject
+	for rows.Next() {
+		var i DriftAnalysisProject
+		if err := rows.Scan(
+			&i.ID,
+			&i.DriftAnalysisRunID,
+			&i.Dir,
+			&i.Type,
+			&i.Drifted,
+			&i.Succeeded,
+			&i.InitOutput,
+			&i.PlanOutput,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const findDriftAnalysisRunByUUID = `-- name: FindDriftAnalysisRunByUUID :one
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
+FROM drift_analysis_run
+WHERE uuid = $1
+`
+
+func (q *Queries) FindDriftAnalysisRunByUUID(ctx context.Context, argUuid uuid.UUID) (DriftAnalysisRun, error) {
+	row := q.db.QueryRow(ctx, findDriftAnalysisRunByUUID, argUuid)
+	var i DriftAnalysisRun
+	err := row.Scan(
+		&i.Uuid,
+		&i.RepositoryID,
+		&i.TotalProjects,
+		&i.TotalProjectsDrifted,
+		&i.AnalysisDurationMillis,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const findDriftAnalysisRunsByRepositoryId = `-- name: FindDriftAnalysisRunsByRepositoryId :many
 SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
 FROM drift_analysis_run
 WHERE repository_id = $1
+ORDER BY created_at DESC
 OFFSET $2 LIMIT $3
 `
 

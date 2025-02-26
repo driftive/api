@@ -4,12 +4,15 @@ import (
 	"context"
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/repository/queries"
+	"github.com/google/uuid"
 )
 
 type DriftAnalysisRepository interface {
 	CreateDriftAnalysisRun(ctx context.Context, params queries.CreateDriftAnalysisRunParams) (queries.DriftAnalysisRun, error)
 	CreateDriftAnalysisProject(ctx context.Context, params queries.CreateDriftAnalysisProjectParams) (queries.DriftAnalysisProject, error)
 	FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error)
+	FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error)
+	FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error)
 
 	WithTx(ctx context.Context, txFunc func(context.Context) error) error
 }
@@ -37,4 +40,12 @@ func (r *DriftAnalysisRepo) FindDriftAnalysisRunsByRepositoryID(ctx context.Cont
 		Maxresults:   25,
 	}
 	return r.db.Queries(ctx).FindDriftAnalysisRunsByRepositoryId(ctx, params)
+}
+
+func (r *DriftAnalysisRepo) FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error) {
+	return r.db.Queries(ctx).FindDriftAnalysisRunByUUID(ctx, uuid)
+}
+
+func (r *DriftAnalysisRepo) FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error) {
+	return r.db.Queries(ctx).FindDriftAnalysisProjectsByRunId(ctx, runId)
 }

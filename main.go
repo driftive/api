@@ -110,6 +110,30 @@ func main() {
 		return c.JSON(ghUser)
 	})
 
+	v1.Get("/org/:org_id/repos", func(c *fiber.Ctx) error {
+		return repositoryHandler.ListOrganizationRepos(c)
+	})
+
+	v1.Get("/org/:org_id/repo", func(c *fiber.Ctx) error {
+		return repositoryHandler.GetRepoByOrgIdAndName(c)
+	})
+
+	v1.Get("/repo/:repo_id/token", func(c *fiber.Ctx) error {
+		return repositoryHandler.GetRepoTokenById(c)
+	})
+
+	v1.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error {
+		return repositoryHandler.RegenerateToken(c)
+	})
+
+	v1.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error {
+		return driftStateHandler.ListRunsByRepoId(c)
+	})
+
+	v1.Get("/analysis/run/:run_id", func(c *fiber.Ctx) error {
+		return driftStateHandler.GetRunById(c)
+	})
+
 	ghG := v1.Group("/gh")
 	ghG.Get("/orgs", func(c *fiber.Ctx) error {
 		return organizationHandler.ListGitOrganizations(c)
@@ -141,26 +165,6 @@ func main() {
 		}
 		go orgSync.SyncOrganizationRepositories(orgIdInt64)
 		return c.SendStatus(fiber.StatusOK)
-	})
-
-	ghG.Get("/org/:org_id/repos", func(c *fiber.Ctx) error {
-		return repositoryHandler.ListOrganizationRepos(c)
-	})
-
-	ghG.Get("/org/:org_id/repo", func(c *fiber.Ctx) error {
-		return repositoryHandler.GetRepoByOrgIdAndName(c)
-	})
-
-	ghG.Get("/repo/:repo_id/token", func(c *fiber.Ctx) error {
-		return repositoryHandler.GetRepoTokenById(c)
-	})
-
-	ghG.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error {
-		return repositoryHandler.RegenerateToken(c)
-	})
-
-	ghG.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error {
-		return driftStateHandler.ListRunsByRepoId(c)
 	})
 
 	// Start background jobs
