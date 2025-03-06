@@ -133,6 +133,68 @@ func (q *Queries) FindGitOrganizationByProviderAndUserID(ctx context.Context, ar
 	return items, nil
 }
 
+const findGitOrganizationByRepoId = `-- name: FindGitOrganizationByRepoId :one
+SELECT go.id, go.provider, go.provider_id, go.name, go.avatar_url, go.installation_id
+FROM git_organization go
+         JOIN git_repository gr
+              ON go.id = gr.organization_id
+WHERE gr.id = $1
+`
+
+func (q *Queries) FindGitOrganizationByRepoId(ctx context.Context, id int64) (GitOrganization, error) {
+	row := q.db.QueryRow(ctx, findGitOrganizationByRepoId, id)
+	var i GitOrganization
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.ProviderID,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.InstallationID,
+	)
+	return i, err
+}
+
+const isUserMemberOfOrganization = `-- name: IsUserMemberOfOrganization :one
+SELECT EXISTS(SELECT 1
+              FROM user_git_organization
+              WHERE git_organization_id = $1
+                AND user_id = $2)
+`
+
+type IsUserMemberOfOrganizationParams struct {
+	GitOrganizationID int64
+	UserID            int64
+}
+
+func (q *Queries) IsUserMemberOfOrganization(ctx context.Context, arg IsUserMemberOfOrganizationParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isUserMemberOfOrganization, arg.GitOrganizationID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const isUserMemberOfOrganizationByRepoId = `-- name: IsUserMemberOfOrganizationByRepoId :one
+SELECT EXISTS(SELECT 1
+              FROM user_git_organization ugo
+                       JOIN git_repository gr
+                            ON ugo.git_organization_id = gr.organization_id
+              WHERE gr.id = $1
+                AND ugo.user_id = $2)
+`
+
+type IsUserMemberOfOrganizationByRepoIdParams struct {
+	RepoID int64
+	UserID int64
+}
+
+func (q *Queries) IsUserMemberOfOrganizationByRepoId(ctx context.Context, arg IsUserMemberOfOrganizationByRepoIdParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isUserMemberOfOrganizationByRepoId, arg.RepoID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const updateOrgInstallationID = `-- name: UpdateOrgInstallationID :exec
 UPDATE git_organization
 SET installation_id = $2

@@ -4,6 +4,7 @@ import (
 	"context"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
+	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"errors"
 	"github.com/gofiber/fiber/v2"
@@ -12,12 +13,17 @@ import (
 )
 
 type DriftStateHandler struct {
+	orgRepository           repository.GitOrgRepository
 	repoRepository          repository.GitRepositoryRepository
 	driftAnalysisRepository repository.DriftAnalysisRepository
 }
 
-func NewDriftStateHandler(repoRepository repository.GitRepositoryRepository, driftAnalysisRepo repository.DriftAnalysisRepository) *DriftStateHandler {
+func NewDriftStateHandler(
+	orgRepository repository.GitOrgRepository,
+	repoRepository repository.GitRepositoryRepository,
+	driftAnalysisRepo repository.DriftAnalysisRepository) *DriftStateHandler {
 	return &DriftStateHandler{
+		orgRepository:           orgRepository,
 		repoRepository:          repoRepository,
 		driftAnalysisRepository: driftAnalysisRepo,
 	}
@@ -62,7 +68,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 
 	log.Debugf("Received drift state update: %v", state)
 
-	d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
+	err = d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
 		params := queries.CreateDriftAnalysisRunParams{
 			Uuid:                   uuid.New(),
 			RepositoryID:           repo.ID,
@@ -106,15 +112,33 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 		return nil
 	})
 
+	if err != nil {
+		log.Errorf("Error handling drift state update: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
 	return c.SendStatus(fiber.StatusOK)
 }
 
 func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
+	userId, err := auth.GetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 	repoIdStr := c.Params("repo_id")
 	if repoIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 	repoId := parsing.StringToInt64(repoIdStr)
+
+	// Check if user is a member of the organization
+	isMember, err := d.orgRepository.IsUserMemberOfOrganizationByRepoId(c.Context(), repoId, *userId)
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	if !isMember {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
 	page := c.QueryInt("page")
 	if page < 0 {
@@ -132,6 +156,10 @@ func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
 }
 
 func (d *DriftStateHandler) GetRunById(c *fiber.Ctx) error {
+	userId, err := auth.GetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 	runIdStr := c.Params("run_id")
 	if runIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -153,6 +181,15 @@ func (d *DriftStateHandler) GetRunById(c *fiber.Ctx) error {
 	if err != nil {
 		log.Errorf("Error finding drift analysis projects by run ID: %v", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	// Check if user is a member of the organization
+	isMember, err := d.orgRepository.IsUserMemberOfOrganizationByRepoId(c.Context(), run.RepositoryID, *userId)
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	if !isMember {
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	runDTO := parsing.ToDriftAnalysisRunWithProjectsDTO(run, projects)

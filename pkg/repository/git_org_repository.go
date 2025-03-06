@@ -13,6 +13,9 @@ type GitOrgRepository interface {
 	FindGitOrgById(ctx context.Context, id int64) (queries.GitOrganization, error)
 	UpdateOrgInstallationID(ctx context.Context, orgId int64, installationId *int64) error
 	FindGitOrgByProviderAndName(ctx context.Context, provider, name string) (queries.GitOrganization, error)
+	IsUserMemberOfOrg(ctx context.Context, orgId, userId int64) (bool, error)
+	FindGitOrganizationByRepoId(ctx context.Context, repoId int64) (queries.GitOrganization, error)
+	IsUserMemberOfOrganizationByRepoId(ctx context.Context, repoId, userId int64) (bool, error)
 }
 
 type GitOrgRepo struct {
@@ -51,4 +54,18 @@ func (g GitOrgRepo) UpdateOrgInstallationID(ctx context.Context, orgId int64, in
 func (g GitOrgRepo) FindGitOrgByProviderAndName(ctx context.Context, provider, name string) (queries.GitOrganization, error) {
 	opts := queries.FindGitOrganizationByProviderAndNameParams{Provider: provider, Name: name}
 	return g.db.Queries(ctx).FindGitOrganizationByProviderAndName(ctx, opts)
+}
+
+func (g GitOrgRepo) IsUserMemberOfOrg(ctx context.Context, orgId, userId int64) (bool, error) {
+	params := queries.IsUserMemberOfOrganizationParams{GitOrganizationID: orgId, UserID: userId}
+	return g.db.Queries(ctx).IsUserMemberOfOrganization(ctx, params)
+}
+
+func (g GitOrgRepo) FindGitOrganizationByRepoId(ctx context.Context, repoId int64) (queries.GitOrganization, error) {
+	return g.db.Queries(ctx).FindGitOrganizationByRepoId(ctx, repoId)
+}
+
+func (g GitOrgRepo) IsUserMemberOfOrganizationByRepoId(ctx context.Context, repoId, userId int64) (bool, error) {
+	params := queries.IsUserMemberOfOrganizationByRepoIdParams{RepoID: repoId, UserID: userId}
+	return g.db.Queries(ctx).IsUserMemberOfOrganizationByRepoId(ctx, params)
 }

@@ -37,3 +37,24 @@ ON CONFLICT (user_id, git_organization_id) DO UPDATE
 UPDATE git_organization
 SET installation_id = $2
 WHERE id = $1;
+
+-- name: IsUserMemberOfOrganization :one
+SELECT EXISTS(SELECT 1
+              FROM user_git_organization
+              WHERE git_organization_id = $1
+                AND user_id = $2);
+
+-- name: FindGitOrganizationByRepoId :one
+SELECT go.*
+FROM git_organization go
+         JOIN git_repository gr
+              ON go.id = gr.organization_id
+WHERE gr.id = $1;
+
+-- name: IsUserMemberOfOrganizationByRepoId :one
+SELECT EXISTS(SELECT 1
+              FROM user_git_organization ugo
+                       JOIN git_repository gr
+                            ON ugo.git_organization_id = gr.organization_id
+              WHERE gr.id = @repo_id
+                AND ugo.user_id = @user_id);

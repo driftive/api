@@ -5,7 +5,7 @@ import (
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/model"
 	"driftive.cloud/api/pkg/repository"
-	"driftive.cloud/api/pkg/usecase/utils/fiberutils"
+	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
@@ -26,9 +26,12 @@ func NewGitOrganizationHandler(cfg config.Config, db *db.DB, orgRepo repository.
 }
 
 func (h *GitOrganizationHandler) ListGitOrganizations(c *fiber.Ctx) error {
-	userId := fiberutils.GetUserId(c)
+	userId, err := auth.GetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 	log.Infof("fetching organizations for user: %d", userId)
-	orgs, err := h.gitOrgRepository.ListGitOrganizationsByProviderAndUserID(c.Context(), "GITHUB", userId)
+	orgs, err := h.gitOrgRepository.ListGitOrganizationsByProviderAndUserID(c.Context(), "GITHUB", *userId)
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
@@ -36,6 +39,10 @@ func (h *GitOrganizationHandler) ListGitOrganizations(c *fiber.Ctx) error {
 }
 
 func (h *GitOrganizationHandler) GetOrgByNameAndProvider(c *fiber.Ctx, provider model.GitProvider) error {
+	userId, err := auth.GetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 	orgName := c.Query("org_name")
 	if orgName == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -44,11 +51,16 @@ func (h *GitOrganizationHandler) GetOrgByNameAndProvider(c *fiber.Ctx, provider 
 	switch provider {
 	case model.GitHubProvider:
 		org, err := h.gitOrgRepository.FindGitOrgByProviderAndName(c.Context(), "GITHUB", orgName)
-
-		// FIXME check if user has permission
-
 		if err != nil {
 			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+		// Check if user is a member of the organization
+		isMember, err := h.gitOrgRepository.IsUserMemberOfOrg(c.Context(), org.ID, *userId)
+		if err != nil {
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+		if !isMember {
+			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 
 		return c.JSON(parsing.ToOrganizationDTO(org))

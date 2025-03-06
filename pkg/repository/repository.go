@@ -19,23 +19,18 @@ type Repository struct {
 func NewRepository(db *db.DB, config *config.Config) Repository {
 	return Repository{db: db, config: config}
 }
-
 func (r *Repository) UserRepository() UserRepository {
 	return &UserRepo{db: r.db}
 }
-
 func (r *Repository) GitOrgRepository() GitOrgRepository {
 	return &GitOrgRepo{db: r.db}
 }
-
 func (r *Repository) GitRepoRepository() GitRepositoryRepository {
 	return &GitRepoRepo{db: r.db}
 }
-
 func (r *Repository) SyncStatusUserRepository() SyncStatusUserRepository {
 	return &SyncStatusUserRepo{db: r.db}
 }
-
 func (r *Repository) DriftAnalysisReepository() DriftAnalysisRepository {
 	return &DriftAnalysisRepo{db: r.db}
 }

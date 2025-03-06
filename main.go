@@ -64,8 +64,8 @@ func main() {
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
-	repositoryHandler := repos.NewGitRepositoryHandler(userRepo, repoRepo)
-	driftStateHandler := drift_stream.NewDriftStateHandler(repoRepo, driftRepo)
+	repositoryHandler := repos.NewGitRepositoryHandler(orgRepo, repoRepo, userRepo)
+	driftStateHandler := drift_stream.NewDriftStateHandler(orgRepo, repoRepo, driftRepo)
 	profileHandler := auth.NewProfileHandler(userRepo)
 
 	// Public routes
