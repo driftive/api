@@ -6,18 +6,17 @@ import (
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/model"
 	"driftive.cloud/api/pkg/repository"
+	"driftive.cloud/api/pkg/usecase/auth"
 	"driftive.cloud/api/pkg/usecase/auth/github"
 	"driftive.cloud/api/pkg/usecase/drift_stream"
 	"driftive.cloud/api/pkg/usecase/orgs"
 	"driftive.cloud/api/pkg/usecase/repos"
 	github3 "driftive.cloud/api/pkg/usecase/sync/org/github"
 	github2 "driftive.cloud/api/pkg/usecase/sync/user_resources/github"
-	"driftive.cloud/api/pkg/usecase/utils/gh"
 	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/joho/godotenv"
 	"strconv"
 )
@@ -57,10 +56,9 @@ func main() {
 	syncStatusUserRepo := repo.SyncStatusUserRepository()
 	driftRepo := repo.DriftAnalysisReepository()
 
+	// syncers
 	orgSync := github3.NewSyncOrganization(orgRepo, repoRepo)
-
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
-
 	syncer := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo)
 
 	// handlers
@@ -68,6 +66,7 @@ func main() {
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
 	repositoryHandler := repos.NewGitRepositoryHandler(userRepo, repoRepo)
 	driftStateHandler := drift_stream.NewDriftStateHandler(repoRepo, driftRepo)
+	profileHandler := auth.NewProfileHandler(userRepo)
 
 	// Public routes
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -79,70 +78,24 @@ func main() {
 	v1.Get("/auth/github/callback", func(c *fiber.Ctx) error {
 		return ghOAuthHandler.Callback(c)
 	})
-
-	v1.Post("/drift_analysis", func(c *fiber.Ctx) error {
-		return driftStateHandler.HandleUpdate(c)
-	})
+	v1.Post("/drift_analysis", func(c *fiber.Ctx) error { return driftStateHandler.HandleUpdate(c) })
 
 	app.Use(jwtware.New(jwtware.Config{
 		SigningKey: jwtware.SigningKey{Key: []byte(cfg.Auth.JwtSecret)},
 	}))
 
 	// Authenticated routes
-	v1.Get("/auth/me", func(c *fiber.Ctx) error {
-		user := c.Locals("user").(*jwt.Token)
-		claims := user.Claims.(jwt.MapClaims)
-		log.Info(claims)
-
-		userIdInt64 := int64(claims["user_id"].(float64))
-		dbUser, err := repo.UserRepository().FindUserByID(c.Context(), userIdInt64)
-		if err != nil {
-			log.Error("error finding user. ", err)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-
-		ghClient := gh.NewDefaultGithubClient(dbUser.AccessToken)
-		ghUser, _, err := ghClient.Users.Get(c.Context(), "")
-		if err != nil {
-			log.Error("error getting github user. ", err)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-		return c.JSON(ghUser)
-	})
-
-	v1.Get("/org/:org_id/repos", func(c *fiber.Ctx) error {
-		return repositoryHandler.ListOrganizationRepos(c)
-	})
-
-	v1.Get("/org/:org_id/repo", func(c *fiber.Ctx) error {
-		return repositoryHandler.GetRepoByOrgIdAndName(c)
-	})
-
-	v1.Get("/repo/:repo_id/token", func(c *fiber.Ctx) error {
-		return repositoryHandler.GetRepoTokenById(c)
-	})
-
-	v1.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error {
-		return repositoryHandler.RegenerateToken(c)
-	})
-
-	v1.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error {
-		return driftStateHandler.ListRunsByRepoId(c)
-	})
-
-	v1.Get("/analysis/run/:run_id", func(c *fiber.Ctx) error {
-		return driftStateHandler.GetRunById(c)
-	})
+	v1.Get("/auth/me", func(c *fiber.Ctx) error { return profileHandler.GetLoggedUser(c) })
+	v1.Get("/org/:org_id/repos", func(c *fiber.Ctx) error { return repositoryHandler.ListOrganizationRepos(c) })
+	v1.Get("/org/:org_id/repo", func(c *fiber.Ctx) error { return repositoryHandler.GetRepoByOrgIdAndName(c) })
+	v1.Get("/repo/:repo_id/token", func(c *fiber.Ctx) error { return repositoryHandler.GetRepoTokenById(c) })
+	v1.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error { return repositoryHandler.RegenerateToken(c) })
+	v1.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error { return driftStateHandler.ListRunsByRepoId(c) })
+	v1.Get("/analysis/run/:run_id", func(c *fiber.Ctx) error { return driftStateHandler.GetRunById(c) })
 
 	ghG := v1.Group("/gh")
-	ghG.Get("/orgs", func(c *fiber.Ctx) error {
-		return organizationHandler.ListGitOrganizations(c)
-	})
-
-	ghG.Get("/org", func(c *fiber.Ctx) error {
-		return organizationHandler.GetOrgByNameAndProvider(c, model.GitHubProvider)
-	})
-
+	ghG.Get("/orgs", func(c *fiber.Ctx) error { return organizationHandler.ListGitOrganizations(c) })
+	ghG.Get("/org", func(c *fiber.Ctx) error { return organizationHandler.GetOrgByNameAndProvider(c, model.GitHubProvider) })
 	ghG.Get("/orgs/install", func(c *fiber.Ctx) error {
 		log.Info("syncing org by id")
 		orgIdStr := c.Query("org_id")
