@@ -124,5 +124,8 @@ func main() {
 	go ghTokenRefresher.RefreshTokens()
 	go syncer.StartSyncLoop()
 
-	app.Listen(":3000")
+	err = app.Listen(":3000")
+	if err != nil {
+		log.Panic("error starting server. ", err)
+	}
 }
