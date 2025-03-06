@@ -71,7 +71,7 @@ func (so SyncOrganization) SyncOrganizationRepositories(orgId int64) {
 	}
 
 	for _, repo := range allRepos {
-		log.Info("repo: ", repo.Name)
+		log.Info("repo: ", *repo.Name)
 
 		params := queries.CreateOrUpdateRepositoryParams{
 			OrganizationID: orgId,
@@ -88,7 +88,7 @@ func (so SyncOrganization) SyncOrganizationRepositories(orgId int64) {
 		log.Info("repo synced: ", updatedRepo.Name)
 	}
 
-	log.Info("repos: ", allRepos)
+	log.Debug("repos: ", allRepos)
 }
 
 func (so SyncOrganization) SyncInstallationIdByOrgId(orgId int64) {
