@@ -16,10 +16,24 @@ import (
 	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v2/middleware/compress"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/healthcheck"
+	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/joho/godotenv"
 	"strconv"
+	"time"
 )
+
+func jwtError(c *fiber.Ctx, err error) error {
+	if err.Error() == "Missing or malformed JWT" {
+		return c.Status(fiber.StatusBadRequest).
+			JSON(fiber.Map{"status": "error", "message": "Missing or malformed JWT", "data": nil})
+	}
+	return c.Status(fiber.StatusUnauthorized).
+		JSON(fiber.Map{"status": "error", "message": "Invalid or expired JWT", "data": nil})
+}
 
 func main() {
 	err := godotenv.Load()
@@ -38,13 +52,19 @@ func main() {
 	if err != nil {
 		log.Panic("error connecting to database. ", err)
 	}
-
 	repo := repository.NewRepository(db_, cfg)
 
 	app := fiber.New()
+	app.Use(requestid.New())
+	app.Use(logger.New(logger.Config{
+		TimeFormat: time.RFC3339,
+		Format:     "${time} | ${locals:requestid} | ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error}\n",
+	}))
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: "*",
 	}))
+	app.Use(healthcheck.New())
+	app.Use(compress.New())
 
 	api := app.Group("/api")
 	v1 := api.Group("/v1")
@@ -54,10 +74,11 @@ func main() {
 	orgRepo := repo.GitOrgRepository()
 	repoRepo := repo.GitRepoRepository()
 	syncStatusUserRepo := repo.SyncStatusUserRepository()
-	driftRepo := repo.DriftAnalysisReepository()
+	driftRepo := repo.DriftAnalysisRepository()
+	orgSyncRepo := repo.GitOrgSyncRepository()
 
 	// syncers
-	orgSync := github3.NewSyncOrganization(orgRepo, repoRepo)
+	orgSync := github3.NewSyncOrganization(orgRepo, repoRepo, orgSyncRepo)
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
 	syncer := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo)
 
@@ -81,7 +102,8 @@ func main() {
 	v1.Post("/drift_analysis", func(c *fiber.Ctx) error { return driftStateHandler.HandleUpdate(c) })
 
 	app.Use(jwtware.New(jwtware.Config{
-		SigningKey: jwtware.SigningKey{Key: []byte(cfg.Auth.JwtSecret)},
+		SigningKey:   jwtware.SigningKey{Key: []byte(cfg.Auth.JwtSecret)},
+		ErrorHandler: jwtError,
 	}))
 
 	// Authenticated routes
@@ -123,6 +145,7 @@ func main() {
 	// Start background jobs
 	go ghTokenRefresher.RefreshTokens()
 	go syncer.StartSyncLoop()
+	go orgSync.StartSyncLoop()
 
 	err = app.Listen(":3000")
 	if err != nil {

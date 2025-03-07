@@ -31,6 +31,7 @@ func (r *Repository) GitRepoRepository() GitRepositoryRepository {
 func (r *Repository) SyncStatusUserRepository() SyncStatusUserRepository {
 	return &SyncStatusUserRepo{db: r.db}
 }
-func (r *Repository) DriftAnalysisReepository() DriftAnalysisRepository {
+func (r *Repository) DriftAnalysisRepository() DriftAnalysisRepository {
 	return &DriftAnalysisRepo{db: r.db}
 }
+func (r *Repository) GitOrgSyncRepository() GitOrgSyncRepository { return &GitOrgSyncRepo{db: r.db} }

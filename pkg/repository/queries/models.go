@@ -40,6 +40,13 @@ type GitOrganization struct {
 	InstallationID *int64
 }
 
+type GitOrganizationSync struct {
+	ID             int64
+	OrganizationID int64
+	SyncedAt       time.Time
+	NextSync       time.Time
+}
+
 type GitRepository struct {
 	ID             int64
 	OrganizationID int64

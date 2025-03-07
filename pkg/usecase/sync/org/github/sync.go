@@ -2,23 +2,64 @@ package github
 
 import (
 	"context"
+	"database/sql"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
+	"errors"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/go-github/v67/github"
+	"time"
 )
 
 type SyncOrganization struct {
-	orgRepository  repository.GitOrgRepository
-	repoRepository repository.GitRepositoryRepository
+	orgRepository     repository.GitOrgRepository
+	repoRepository    repository.GitRepositoryRepository
+	orgSyncRepository repository.GitOrgSyncRepository
 }
 
-func NewSyncOrganization(orgRepository repository.GitOrgRepository, repoRepository repository.GitRepositoryRepository) SyncOrganization {
+func NewSyncOrganization(orgRepository repository.GitOrgRepository, repoRepository repository.GitRepositoryRepository, gitOrgSyncRepo repository.GitOrgSyncRepository) SyncOrganization {
 	return SyncOrganization{
-		orgRepository:  orgRepository,
-		repoRepository: repoRepository,
+		orgRepository:     orgRepository,
+		repoRepository:    repoRepository,
+		orgSyncRepository: gitOrgSyncRepo,
+	}
+}
+
+func (so SyncOrganization) StartSyncLoop() {
+	for {
+		ctx := context.Background()
+		err := so.orgSyncRepository.WithTx(ctx, func(ctx context.Context) error {
+			orgSync, err := so.orgSyncRepository.FindOnePending(ctx)
+			if err != nil {
+				if !errors.Is(err, sql.ErrNoRows) {
+					log.Errorf("error finding pending org to sync: %v", err)
+				}
+			}
+
+			if orgSync.ID != 0 {
+				log.Infof("syncing org: %d", orgSync.OrganizationID)
+				org, err := so.orgRepository.FindGitOrgById(ctx, orgSync.OrganizationID)
+				if org.InstallationID == nil {
+					so.SyncInstallationIdByOrgId(org.ID)
+				}
+
+				so.SyncOrganizationRepositories(org.ID)
+
+				log.Infof("updating sync status for org: %d", org.ID)
+				_, err = so.orgSyncRepository.UpdateSyncStatus(ctx, org.ID)
+				if err != nil {
+					log.Errorf("error updating sync status for user: %v", err)
+				}
+				log.Infof("successfully synced organization ID: %d", org.ID)
+			}
+			return nil
+		})
+		if err != nil {
+			log.Errorf("error handling sync transaction: %v", err)
+		}
+		time.Sleep(2 * time.Second)
 	}
 }
 
