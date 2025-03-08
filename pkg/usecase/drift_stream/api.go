@@ -121,7 +121,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 }
 
 func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
-	userId, err := auth.GetLoggedUserId(c)
+	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
@@ -156,7 +156,7 @@ func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
 }
 
 func (d *DriftStateHandler) GetRunById(c *fiber.Ctx) error {
-	userId, err := auth.GetLoggedUserId(c)
+	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}

@@ -28,23 +28,13 @@ func NewGitRepositoryHandler(
 }
 
 func (h *GitRepositoryHandler) ListOrganizationRepos(c *fiber.Ctx) error {
-	userId, err := auth.GetLoggedUserId(c)
-	if err != nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
 	orgIdStr := c.Params("org_id")
 	if orgIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 	orgId := parsing.StringToInt64(orgIdStr)
-
-	// Check if user is a member of the organization
-	isMember, err := h.orgRepository.IsUserMemberOfOrg(c.Context(), orgId, *userId)
+	err := auth.MustHavePermission(c, orgId)
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	if !isMember {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -58,23 +48,13 @@ func (h *GitRepositoryHandler) ListOrganizationRepos(c *fiber.Ctx) error {
 }
 
 func (h *GitRepositoryHandler) GetRepoByOrgIdAndName(c *fiber.Ctx) error {
-	userId, err := auth.GetLoggedUserId(c)
-	if err != nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
 	orgIdStr := c.Params("org_id")
 	if orgIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 	orgId := parsing.StringToInt64(orgIdStr)
-
-	// Check if user is a member of the organization
-	isMember, err := h.orgRepository.IsUserMemberOfOrg(c.Context(), orgId, *userId)
+	err := auth.MustHavePermission(c, orgId)
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	if !isMember {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -93,10 +73,6 @@ func (h *GitRepositoryHandler) GetRepoByOrgIdAndName(c *fiber.Ctx) error {
 }
 
 func (h *GitRepositoryHandler) GetRepoTokenById(c *fiber.Ctx) error {
-	userId, err := auth.GetLoggedUserId(c)
-	if err != nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
 	repoIdStr := c.Params("repo_id")
 	if repoIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -107,16 +83,10 @@ func (h *GitRepositoryHandler) GetRepoTokenById(c *fiber.Ctx) error {
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
-
-	// Check if user is a member of the organization
-	isMember, err := h.orgRepository.IsUserMemberOfOrg(c.Context(), repo.OrganizationID, *userId)
+	err = auth.MustHavePermission(c, repo.OrganizationID)
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-	if !isMember {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
-
 	tokenResponse := struct {
 		Token *string `json:"token"`
 	}{
@@ -127,7 +97,7 @@ func (h *GitRepositoryHandler) GetRepoTokenById(c *fiber.Ctx) error {
 }
 
 func (h *GitRepositoryHandler) RegenerateToken(c *fiber.Ctx) error {
-	userId, err := auth.GetLoggedUserId(c)
+	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}

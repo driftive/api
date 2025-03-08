@@ -4,6 +4,7 @@ import (
 	"context"
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
+	"driftive.cloud/api/pkg/middleware/perms"
 	"driftive.cloud/api/pkg/model"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/auth"
@@ -105,6 +106,7 @@ func main() {
 		SigningKey:   jwtware.SigningKey{Key: []byte(cfg.Auth.JwtSecret)},
 		ErrorHandler: jwtError,
 	}))
+	app.Use(perms.New(orgRepo))
 
 	// Authenticated routes
 	v1.Get("/auth/me", func(c *fiber.Ctx) error { return profileHandler.GetLoggedUser(c) })

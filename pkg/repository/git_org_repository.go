@@ -16,6 +16,7 @@ type GitOrgRepository interface {
 	IsUserMemberOfOrg(ctx context.Context, orgId, userId int64) (bool, error)
 	FindGitOrganizationByRepoId(ctx context.Context, repoId int64) (queries.GitOrganization, error)
 	IsUserMemberOfOrganizationByRepoId(ctx context.Context, repoId, userId int64) (bool, error)
+	FindAllUserOrganizationIds(ctx context.Context, userId int64) ([]int64, error)
 }
 
 type GitOrgRepo struct {
@@ -68,4 +69,8 @@ func (g GitOrgRepo) FindGitOrganizationByRepoId(ctx context.Context, repoId int6
 func (g GitOrgRepo) IsUserMemberOfOrganizationByRepoId(ctx context.Context, repoId, userId int64) (bool, error) {
 	params := queries.IsUserMemberOfOrganizationByRepoIdParams{RepoID: repoId, UserID: userId}
 	return g.db.Queries(ctx).IsUserMemberOfOrganizationByRepoId(ctx, params)
+}
+
+func (g GitOrgRepo) FindAllUserOrganizationIds(ctx context.Context, userId int64) ([]int64, error) {
+	return g.db.Queries(ctx).FindAllUserOrganizationIds(ctx, userId)
 }

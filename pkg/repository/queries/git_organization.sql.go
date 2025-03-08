@@ -46,6 +46,32 @@ func (q *Queries) CreateOrUpdateGitOrganization(ctx context.Context, arg CreateO
 	return i, err
 }
 
+const findAllUserOrganizationIds = `-- name: FindAllUserOrganizationIds :many
+SELECT git_organization_id
+FROM user_git_organization
+WHERE user_id = $1
+`
+
+func (q *Queries) FindAllUserOrganizationIds(ctx context.Context, userID int64) ([]int64, error) {
+	rows, err := q.db.Query(ctx, findAllUserOrganizationIds, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var git_organization_id int64
+		if err := rows.Scan(&git_organization_id); err != nil {
+			return nil, err
+		}
+		items = append(items, git_organization_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const findGitOrganizationByID = `-- name: FindGitOrganizationByID :one
 SELECT id, provider, provider_id, name, avatar_url, installation_id
 FROM git_organization

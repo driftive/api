@@ -58,3 +58,8 @@ SELECT EXISTS(SELECT 1
                             ON ugo.git_organization_id = gr.organization_id
               WHERE gr.id = @repo_id
                 AND ugo.user_id = @user_id);
+
+-- name: FindAllUserOrganizationIds :many
+SELECT git_organization_id
+FROM user_git_organization
+WHERE user_id = $1;

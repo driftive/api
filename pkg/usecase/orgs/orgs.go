@@ -26,7 +26,7 @@ func NewGitOrganizationHandler(cfg config.Config, db *db.DB, orgRepo repository.
 }
 
 func (h *GitOrganizationHandler) ListGitOrganizations(c *fiber.Ctx) error {
-	userId, err := auth.GetLoggedUserId(c)
+	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
@@ -39,10 +39,6 @@ func (h *GitOrganizationHandler) ListGitOrganizations(c *fiber.Ctx) error {
 }
 
 func (h *GitOrganizationHandler) GetOrgByNameAndProvider(c *fiber.Ctx, provider model.GitProvider) error {
-	userId, err := auth.GetLoggedUserId(c)
-	if err != nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
 	orgName := c.Query("org_name")
 	if orgName == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -54,12 +50,8 @@ func (h *GitOrganizationHandler) GetOrgByNameAndProvider(c *fiber.Ctx, provider 
 		if err != nil {
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
-		// Check if user is a member of the organization
-		isMember, err := h.gitOrgRepository.IsUserMemberOfOrg(c.Context(), org.ID, *userId)
+		err = auth.MustHavePermission(c, org.ID)
 		if err != nil {
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-		if !isMember {
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 
