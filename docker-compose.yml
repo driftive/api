@@ -4,7 +4,7 @@ services:
     image: driftive
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.multi-stage
     restart: always
     depends_on:
       migrations:
