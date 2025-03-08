@@ -77,7 +77,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 			AnalysisDurationMillis: state.Duration.Milliseconds(),
 		}
 
-		run, err := d.driftAnalysisRepository.CreateDriftAnalysisRun(c.Context(), params)
+		run, err := d.driftAnalysisRepository.CreateDriftAnalysisRun(ctx, params)
 		if err != nil {
 			log.Errorf("Error creating drift analysis run: %v", err)
 			return err
@@ -100,7 +100,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 				InitOutput:         &project.InitOutput,
 				PlanOutput:         &project.PlanOutput,
 			}
-			res, err := d.driftAnalysisRepository.CreateDriftAnalysisProject(c.Context(), projectParams)
+			res, err := d.driftAnalysisRepository.CreateDriftAnalysisProject(ctx, projectParams)
 			if err != nil {
 				log.Errorf("Error creating drift analysis project: %v", err)
 				return err

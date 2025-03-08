@@ -41,11 +41,15 @@ func (so SyncOrganization) StartSyncLoop() {
 			if orgSync.ID != 0 {
 				log.Infof("syncing org: %d", orgSync.OrganizationID)
 				org, err := so.orgRepository.FindGitOrgById(ctx, orgSync.OrganizationID)
+				if err != nil {
+					log.Errorf("error fetching org by id: %v", err)
+					return err
+				}
 				if org.InstallationID == nil {
-					so.SyncInstallationIdByOrgId(org.ID)
+					so.SyncInstallationIdByOrgId(ctx, org.ID)
 				}
 
-				so.SyncOrganizationRepositories(org.ID)
+				so.SyncOrganizationRepositories(ctx, org.ID)
 
 				log.Infof("updating sync status for org: %d", org.ID)
 				_, err = so.orgSyncRepository.UpdateSyncStatus(ctx, org.ID)
@@ -63,9 +67,7 @@ func (so SyncOrganization) StartSyncLoop() {
 	}
 }
 
-func (so SyncOrganization) SyncOrganizationRepositories(orgId int64) {
-	ctx := context.Background()
-
+func (so SyncOrganization) SyncOrganizationRepositories(ctx context.Context, orgId int64) {
 	org, err := so.orgRepository.FindGitOrgById(ctx, orgId)
 	if err != nil {
 		log.Error("error fetching org by id: ", err)
@@ -132,9 +134,7 @@ func (so SyncOrganization) SyncOrganizationRepositories(orgId int64) {
 	log.Debug("repos: ", allRepos)
 }
 
-func (so SyncOrganization) SyncInstallationIdByOrgId(orgId int64) {
-	ctx := context.Background()
-
+func (so SyncOrganization) SyncInstallationIdByOrgId(ctx context.Context, orgId int64) {
 	ghClient, err := gh.NewAppGithubClient()
 	if err != nil {
 		log.Error("error creating github client: ", err)

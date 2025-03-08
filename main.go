@@ -120,17 +120,6 @@ func main() {
 	ghG := v1.Group("/gh")
 	ghG.Get("/orgs", func(c *fiber.Ctx) error { return organizationHandler.ListGitOrganizations(c) })
 	ghG.Get("/org", func(c *fiber.Ctx) error { return organizationHandler.GetOrgByNameAndProvider(c, model.GitHubProvider) })
-	ghG.Get("/orgs/install", func(c *fiber.Ctx) error {
-		log.Info("syncing org by id")
-		orgIdStr := c.Query("org_id")
-		orgIdInt64, err := strconv.ParseInt(orgIdStr, 10, 64)
-		if err != nil {
-			log.Error("error parsing org_id. ", err)
-			return c.SendStatus(fiber.StatusBadRequest)
-		}
-		go orgSync.SyncInstallationIdByOrgId(orgIdInt64)
-		return c.SendStatus(fiber.StatusOK)
-	})
 
 	ghG.Get("/orgs/sync", func(c *fiber.Ctx) error {
 		log.Info("syncing org by id")
@@ -140,7 +129,7 @@ func main() {
 			log.Error("error parsing org_id. ", err)
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
-		go orgSync.SyncOrganizationRepositories(orgIdInt64)
+		go orgSync.SyncOrganizationRepositories(c.Context(), orgIdInt64)
 		return c.SendStatus(fiber.StatusOK)
 	})
 

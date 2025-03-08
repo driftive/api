@@ -1,18 +1,15 @@
 package github
 
 import (
-	"bytes"
 	"context"
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/model/auth/github"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/gofiber/fiber/v2/log"
-	"io"
-	"net/http"
+	"resty.dev/v3"
 	"time"
 )
 
@@ -39,62 +36,36 @@ const (
 	refreshTokenRequestErr = "error refreshing token"
 )
 
-func (r *TokenRefresher) SendHttpReq(body RefreshTokenBody) (*github.AccessTokenResponse, error) {
-	client := http.Client{}
+func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody) (*github.AccessTokenResponse, error) {
 
-	bodyBytes, err := json.Marshal(body)
-	if err != nil {
-		log.Errorf("error marshalling body: %v", err)
-		return nil, errors.New(refreshTokenRequestErr)
-	}
-	bodyReader := bytes.NewReader(bodyBytes)
+	client := resty.New()
+	defer client.Close()
 
-	request, err := http.NewRequest(http.MethodPost,
-		fmt.Sprintf("%s/login/oauth/access_token", r.cfg.GithubAppConfig.GithubURL),
-		bodyReader)
-
-	if err != nil {
-		log.Errorf("error preparing request: %v", err)
-		return nil, errors.New(refreshTokenRequestErr)
-	}
-	request.Header.Set("Accept", "application/json")
-	request.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(request)
+	resp, err := client.R().
+		WithContext(ctx).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Content-Type", "application/json").
+		SetBody(body).
+		SetResult(&github.AccessTokenResponse{}).
+		Post(fmt.Sprintf("%s/login/oauth/access_token", r.cfg.GithubAppConfig.GithubURL))
 	if err != nil {
 		log.Errorf("error sending request: %v", err)
 		return nil, errors.New(refreshTokenRequestErr)
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		log.Errorf("error response status: %v", resp.StatusCode)
+	if resp.IsError() {
+		log.Errorf("error response status: %v", resp.Status())
 		return nil, errors.New(refreshTokenRequestErr)
 	}
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Errorf("error reading response body: %v", err)
-		return nil, errors.New(refreshTokenRequestErr)
-	}
-
-	log.Infof("gh code exchange response: %v", string(respBody))
-
-	var tokenResponse github.AccessTokenResponse
-	err = json.Unmarshal(respBody, &tokenResponse)
-	if err != nil {
-		log.Errorf("error unmarshalling response: %v", err)
-		return nil, errors.New(refreshTokenRequestErr)
-	}
-
-	return &tokenResponse, nil
+	tokenResponse := resp.Result().(*github.AccessTokenResponse)
+	return tokenResponse, nil
 }
 
-func (r *TokenRefresher) RefreshToken(user *queries.User) error {
+func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) error {
 
 	now := time.Now()
 
-	tokenResponse, err := r.SendHttpReq(RefreshTokenBody{
+	tokenResponse, err := r.SendHttpReq(ctx, RefreshTokenBody{
 		ClientId:     r.cfg.GithubAppConfig.ClientID,
 		ClientSecret: r.cfg.GithubAppConfig.ClientSecret,
 		RefreshToken: user.RefreshToken,
@@ -158,7 +129,7 @@ func (r *TokenRefresher) RefreshTokens() {
 		fetchedUsers = len(users)
 
 		for _, user := range users {
-			err := r.RefreshToken(&user)
+			err := r.RefreshToken(ctx, &user)
 			if err != nil {
 				log.Errorf("error refreshing token: %v", err)
 			}
@@ -168,6 +139,5 @@ func (r *TokenRefresher) RefreshTokens() {
 			log.Info("sleeping for 10 minutes...")
 			time.Sleep(10 * time.Minute)
 		}
-
 	}
 }
