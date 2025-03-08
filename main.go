@@ -41,7 +41,7 @@ func jwtError(c *fiber.Ctx, err error) error {
 func main() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Warn("Error loading .env file")
 	}
 
 	// load config
