@@ -55,7 +55,7 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 
 	epoch := time.Now().Unix()
 
-	tokenResponse, err := o.ExchangeCodeForToken(code)
+	tokenResponse, err := o.ExchangeCodeForToken(ctx, code)
 	if err != nil {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
@@ -136,7 +136,7 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 	return nil
 }
 
-func (o *OAuthHandler) ExchangeCodeForToken(oauthCode string) (*github.AccessTokenResponse, error) {
+func (o *OAuthHandler) ExchangeCodeForToken(ctx context.Context, oauthCode string) (*github.AccessTokenResponse, error) {
 	client := http.Client{}
 
 	ghUrl := os.Getenv("GITHUB_URL")
@@ -146,7 +146,7 @@ func (o *OAuthHandler) ExchangeCodeForToken(oauthCode string) (*github.AccessTok
 	url := fmt.Sprintf("%s/login/oauth/access_token?client_id=%s&client_secret=%s&code=%s",
 		ghUrl, ghClientId, ghClientSecret, oauthCode)
 
-	request, err := http.NewRequest(http.MethodPost, url, nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	request.Header.Set("Accept", "application/json")
 	request.Header.Set("Content-Type", "application/json")
 	if err != nil {

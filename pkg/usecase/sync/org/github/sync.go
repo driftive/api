@@ -79,7 +79,7 @@ func (so SyncOrganization) SyncOrganizationRepositories(ctx context.Context, org
 		return
 	}
 
-	ghClient, err := gh.NewAppGithubInstallationClient(*org.InstallationID)
+	ghClient, err := gh.NewAppGithubInstallationClient(ctx, *org.InstallationID)
 	if err != nil {
 		log.Error("error creating github client: ", err)
 		log.Error("aborting org sync")
@@ -135,7 +135,7 @@ func (so SyncOrganization) SyncOrganizationRepositories(ctx context.Context, org
 }
 
 func (so SyncOrganization) SyncInstallationIdByOrgId(ctx context.Context, orgId int64) {
-	ghClient, err := gh.NewAppGithubClient()
+	ghClient, err := gh.NewAppGithubClient(ctx)
 	if err != nil {
 		log.Error("error creating github client: ", err)
 		log.Error("aborting org sync")

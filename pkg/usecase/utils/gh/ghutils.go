@@ -36,7 +36,7 @@ func NewUserGithubClient(ctx context.Context, userId int64, usersRepository repo
 	return NewDefaultGithubClient(user.AccessToken), nil
 }
 
-func NewAppGithubInstallationClient(installationId int64) (*github.Client, error) {
+func NewAppGithubInstallationClient(ctx context.Context, installationId int64) (*github.Client, error) {
 	ghAppPrivateKeyBase64 := os.Getenv("GITHUB_APP_PRIVATE_KEY_BASE64")
 	appID, _ := strconv.ParseInt(os.Getenv("GITHUB_APP_ID"), 10, 64)
 
@@ -51,12 +51,12 @@ func NewAppGithubInstallationClient(installationId int64) (*github.Client, error
 
 	installationTokenSource := githubauth.NewInstallationTokenSource(installationId, appTokenSource)
 
-	oauth2HttpClient := oauth2.NewClient(context.Background(), installationTokenSource)
+	oauth2HttpClient := oauth2.NewClient(ctx, installationTokenSource)
 	ghClient := github.NewClient(oauth2HttpClient)
 	return ghClient, nil
 }
 
-func NewAppGithubClient() (*github.Client, error) {
+func NewAppGithubClient(ctx context.Context) (*github.Client, error) {
 	ghAppPrivateKeyBase64 := os.Getenv("GITHUB_APP_PRIVATE_KEY_BASE64")
 	appID, _ := strconv.ParseInt(os.Getenv("GITHUB_APP_ID"), 10, 64)
 
@@ -69,7 +69,7 @@ func NewAppGithubClient() (*github.Client, error) {
 		return nil, err
 	}
 
-	oauth2HttpClient := oauth2.NewClient(context.Background(), appTokenSource)
+	oauth2HttpClient := oauth2.NewClient(ctx, appTokenSource)
 	ghClient := github.NewClient(oauth2HttpClient)
 	return ghClient, nil
 }

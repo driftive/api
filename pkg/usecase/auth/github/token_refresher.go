@@ -85,7 +85,7 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 		refreshTokenExpiresAt = now.Add(time.Duration(tokenResponse.RefreshTokenExpiresIn) * time.Second)
 	}
 
-	_, err = r.userRepository.UpdateUserTokens(context.Background(), queries.UpdateUserTokensParams{
+	_, err = r.userRepository.UpdateUserTokens(ctx, queries.UpdateUserTokensParams{
 		ID:                    user.ID,
 		AccessToken:           tokenResponse.AccessToken,
 		AccessTokenExpiresAt:  &accessTokenExpiresAt,
