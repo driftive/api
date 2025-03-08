@@ -39,7 +39,7 @@ func jwtError(c *fiber.Ctx, err error) error {
 }
 
 func main() {
-	err := godotenv.Load()
+	err := godotenv.Load(utils.GetEnvOrDefault("APP_ENV", ".env"))
 	if err != nil {
 		log.Warn("Error loading .env file")
 	}
