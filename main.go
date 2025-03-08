@@ -14,6 +14,8 @@ import (
 	"driftive.cloud/api/pkg/usecase/repos"
 	github3 "driftive.cloud/api/pkg/usecase/sync/org/github"
 	github2 "driftive.cloud/api/pkg/usecase/sync/user_resources/github"
+	"driftive.cloud/api/pkg/utils"
+	"fmt"
 	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
@@ -138,7 +140,8 @@ func main() {
 	go syncer.StartSyncLoop()
 	go orgSync.StartSyncLoop()
 
-	err = app.Listen(":3000")
+	port := utils.GetEnvOrDefault("PORT", "3000")
+	err = app.Listen(fmt.Sprintf(":%s", port))
 	if err != nil {
 		log.Panic("error starting server. ", err)
 	}

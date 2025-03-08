@@ -1,17 +1,10 @@
 package config
 
 import (
+	"driftive.cloud/api/pkg/utils"
 	"os"
 	"strconv"
 )
-
-func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
-}
 
 type Config struct {
 	Database        Database
@@ -43,12 +36,12 @@ type AuthConfig struct {
 }
 
 func LoadConfig() (*Config, error) {
-	port, err := strconv.Atoi(getEnv("DB_PORT", "5432"))
+	port, err := strconv.Atoi(utils.GetEnvOrDefault("DB_PORT", "5432"))
 	if err != nil {
 		return nil, err
 	}
 
-	connections, err := strconv.Atoi(getEnv("DB_CONNECTIONS", "10"))
+	connections, err := strconv.Atoi(utils.GetEnvOrDefault("DB_CONNECTIONS", "10"))
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +63,8 @@ func LoadConfig() (*Config, error) {
 	}
 
 	auth := AuthConfig{
-		LoginRedirectUrl: getEnv("LOGIN_REDIRECT_URL", "http://localhost:3001/login/success"),
-		JwtSecret:        getEnv("JWT_SECRET", ""),
+		LoginRedirectUrl: utils.GetEnvOrDefault("LOGIN_REDIRECT_URL", "http://localhost:3001/login/success"),
+		JwtSecret:        utils.GetEnvOrDefault("JWT_SECRET", ""),
 	}
 
 	config := Config{
