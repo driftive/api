@@ -48,7 +48,6 @@ func (d *DB) Queries(ctx context.Context) *queries.Queries {
 }
 
 func (d *DB) WithTx(ctx context.Context, fn func(context.Context) error) error {
-
 	if ctx.Value("tx") != nil {
 		return errors.New("transaction already in progress")
 	}

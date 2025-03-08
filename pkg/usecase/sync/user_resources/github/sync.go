@@ -141,6 +141,5 @@ func (s *UserResourceSyncer) StartSyncLoop() {
 		if err != nil {
 			log.Errorf("error handling sync transaction: %v", err)
 		}
-
 	}
 }

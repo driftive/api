@@ -84,7 +84,6 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 		}
 
 		for _, project := range state.ProjectResults {
-
 			projectType, err := projectTypeToDBString(project.Project.Type)
 			if err != nil {
 				log.Errorf("Error converting project type to db string: %v", err)

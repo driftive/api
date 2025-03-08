@@ -37,7 +37,6 @@ const (
 )
 
 func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody) (*github.AccessTokenResponse, error) {
-
 	client := resty.New()
 	defer client.Close()
 
@@ -62,7 +61,6 @@ func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody)
 }
 
 func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) error {
-
 	now := time.Now()
 
 	tokenResponse, err := r.SendHttpReq(ctx, RefreshTokenBody{

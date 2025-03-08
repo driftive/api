@@ -43,7 +43,6 @@ type AuthConfig struct {
 }
 
 func LoadConfig() (*Config, error) {
-
 	port, err := strconv.Atoi(getEnv("DB_PORT", "5432"))
 	if err != nil {
 		return nil, err
