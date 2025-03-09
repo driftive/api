@@ -61,3 +61,12 @@ func (h *GitOrganizationHandler) GetOrgByNameAndProvider(c *fiber.Ctx, provider 
 	}
 	return c.SendStatus(fiber.StatusNotImplemented)
 }
+
+// HandleGHOrganizationInstalled handles the installation of a GitHub organization
+// Currently, it just logs the installation ID and redirects to the frontend
+// TODO: Implement the actual handling of the installation
+func (h *GitOrganizationHandler) HandleGHOrganizationInstalled(c *fiber.Ctx) error {
+	log.Infof("GH organization installed. Installation ID: %s. Setup action: %s",
+		c.Params("installation_id"), c.Params("setup_action"))
+	return c.Redirect(h.cfg.Frontend.FrontendURL + "/gh/orgs")
+}

@@ -102,6 +102,7 @@ func main() {
 		return ghOAuthHandler.Callback(c)
 	})
 	v1.Post("/drift_analysis", func(c *fiber.Ctx) error { return driftStateHandler.HandleUpdate(c) })
+	v1.Get("/orgs/gh_installed", func(c *fiber.Ctx) error { return organizationHandler.HandleGHOrganizationInstalled(c) })
 
 	app.Use(jwtware.New(jwtware.Config{
 		SigningKey:   jwtware.SigningKey{Key: []byte(cfg.Auth.JwtSecret)},
