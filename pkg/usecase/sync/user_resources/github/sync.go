@@ -23,17 +23,20 @@ type UserResourceSyncer struct {
 	gitOrgRepository     repository.GitOrgRepository
 	gitRepoRepository    repository.GitRepositoryRepository
 	syncStatusRepository repository.SyncStatusUserRepository
+	orgSyncRepository    repository.GitOrgSyncRepository
 }
 
 func NewUserResourceSyncer(userRepo repository.UserRepository,
 	gitOrgRepo repository.GitOrgRepository,
 	repositoryRepository repository.GitRepositoryRepository,
-	syncStatusRepository repository.SyncStatusUserRepository) UserResourceSyncer {
+	syncStatusRepository repository.SyncStatusUserRepository,
+	orgSyncRepository repository.GitOrgSyncRepository) UserResourceSyncer {
 	return UserResourceSyncer{
 		userRepository:       userRepo,
 		gitOrgRepository:     gitOrgRepo,
 		gitRepoRepository:    repositoryRepository,
 		syncStatusRepository: syncStatusRepository,
+		orgSyncRepository:    orgSyncRepository,
 	}
 }
 
@@ -85,6 +88,12 @@ func (s *UserResourceSyncer) SyncUserResources(ctx context.Context, userId int64
 		updatedOrg, err := s.gitOrgRepository.CreateOrUpdateGitOrganization(ctx, createOrgOpts)
 		if err != nil {
 			log.Errorf("error saving organizations for user %d: %v", userId, err)
+			return err
+		}
+
+		err = s.orgSyncRepository.CreateGitOrganizationSyncIfNotExists(ctx, updatedOrg.ID)
+		if err != nil {
+			log.Errorf("error creating organization sync: %v", err)
 			return err
 		}
 

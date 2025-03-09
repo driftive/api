@@ -82,7 +82,7 @@ func main() {
 	// syncers
 	orgSync := github3.NewSyncOrganization(orgRepo, repoRepo, orgSyncRepo)
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
-	userSync := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo)
+	userSync := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo, orgSyncRepo)
 
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)

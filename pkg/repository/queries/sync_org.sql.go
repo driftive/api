@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const createGitOrganizationSyncIfNotExists = `-- name: CreateGitOrganizationSyncIfNotExists :exec
+INSERT INTO git_organization_sync (organization_id, next_sync)
+VALUES ($1, NOW())
+ON CONFLICT (organization_id) DO NOTHING
+`
+
+func (q *Queries) CreateGitOrganizationSyncIfNotExists(ctx context.Context, organizationID int64) error {
+	_, err := q.db.Exec(ctx, createGitOrganizationSyncIfNotExists, organizationID)
+	return err
+}
+
 const findOnePendingSyncOrg = `-- name: FindOnePendingSyncOrg :one
 SELECT id, organization_id, synced_at, next_sync
 FROM git_organization_sync

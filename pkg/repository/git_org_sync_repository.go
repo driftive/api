@@ -7,6 +7,7 @@ import (
 )
 
 type GitOrgSyncRepository interface {
+	CreateGitOrganizationSyncIfNotExists(ctx context.Context, orgId int64) error
 	FindOnePending(ctx context.Context) (queries.GitOrganizationSync, error)
 	UpdateSyncStatus(ctx context.Context, orgId int64) (queries.GitOrganizationSync, error)
 	WithTx(ctx context.Context, fn func(context.Context) error) error
@@ -14,6 +15,10 @@ type GitOrgSyncRepository interface {
 
 type GitOrgSyncRepo struct {
 	db *db.DB
+}
+
+func (g GitOrgSyncRepo) CreateGitOrganizationSyncIfNotExists(ctx context.Context, orgId int64) error {
+	return g.db.Queries(ctx).CreateGitOrganizationSyncIfNotExists(ctx, orgId)
 }
 
 func (g GitOrgSyncRepo) FindOnePending(ctx context.Context) (queries.GitOrganizationSync, error) {
