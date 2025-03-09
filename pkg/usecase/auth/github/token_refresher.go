@@ -69,7 +69,7 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 		RefreshToken: user.RefreshToken,
 		GrantType:    "refresh_token",
 	})
-	if err != nil {
+	if err != nil || tokenResponse == nil || tokenResponse.AccessToken == "" || tokenResponse.RefreshToken == "" {
 		log.Errorf("error refreshing token: %v", err)
 		return errors.New(refreshTokenRequestErr)
 	}
@@ -98,7 +98,7 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 		return errors.New(refreshTokenRequestErr)
 	}
 
-	log.Infof("refreshed token: %v", tokenResponse)
+	log.Infof("token refreshed for user: %d", user.ID)
 	return nil
 }
 
