@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
+	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"driftive.cloud/api/pkg/usecase/utils/strutils"
 	"errors"
+	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/go-github/v67/github"
 	"time"
@@ -142,4 +144,19 @@ func (s *UserResourceSyncer) StartSyncLoop() {
 			log.Errorf("error handling sync transaction: %v", err)
 		}
 	}
+}
+
+func (s *UserResourceSyncer) HandleUserSyncRequest(c *fiber.Ctx) error {
+	userId, err := auth.MustGetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	log.Infof("syncing organizations for user: %d", userId)
+
+	err = s.SyncUserResources(c.Context(), *userId)
+	if err != nil {
+		log.Errorf("error syncing organizations for user: %d: %v", userId, err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	return c.SendStatus(fiber.StatusOK)
 }
