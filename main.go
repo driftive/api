@@ -82,7 +82,7 @@ func main() {
 	// syncers
 	orgSync := github3.NewSyncOrganization(orgRepo, repoRepo, orgSyncRepo)
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
-	syncer := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo)
+	userSync := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo)
 
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
@@ -118,6 +118,7 @@ func main() {
 	v1.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error { return repositoryHandler.RegenerateToken(c) })
 	v1.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error { return driftStateHandler.ListRunsByRepoId(c) })
 	v1.Get("/analysis/run/:run_id", func(c *fiber.Ctx) error { return driftStateHandler.GetRunById(c) })
+	v1.Post("/sync_user", func(c *fiber.Ctx) error { return userSync.HandleUserSyncRequest(c) })
 
 	ghG := v1.Group("/gh")
 	ghG.Get("/orgs", func(c *fiber.Ctx) error { return organizationHandler.ListGitOrganizations(c) })
@@ -125,7 +126,7 @@ func main() {
 
 	// Start background jobs
 	go ghTokenRefresher.RefreshTokens()
-	go syncer.StartSyncLoop()
+	go userSync.StartSyncLoop()
 	go orgSync.StartSyncLoop()
 
 	port := utils.GetEnvOrDefault("PORT", "3000")
