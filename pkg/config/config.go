@@ -10,6 +10,7 @@ type Config struct {
 	Database        Database
 	GithubAppConfig GitHubAppConfig
 	Auth            AuthConfig
+	Frontend        FrontendConfig
 }
 
 type Database struct {
@@ -33,6 +34,11 @@ type AuthConfig struct {
 	// LoginRedirectUrl is the URL to redirect to after login. Default is http://localhost:3001/login/success. It should be the URL of the frontend
 	LoginRedirectUrl string
 	JwtSecret        string
+}
+
+type FrontendConfig struct {
+	// FrontendURL is the URL of the frontend. Default is http://localhost:3001
+	FrontendURL string
 }
 
 func LoadConfig() (*Config, error) {
@@ -67,10 +73,16 @@ func LoadConfig() (*Config, error) {
 		JwtSecret:        utils.GetEnvOrDefault("JWT_SECRET", ""),
 	}
 
+	frontend := FrontendConfig{
+		FrontendURL: utils.GetEnvOrDefault("DRIFTIVE_UI_BASE_URL", "http://localhost:3001"),
+	}
+
 	config := Config{
 		Database:        database,
 		GithubAppConfig: ghAppConfig,
 		Auth:            auth,
+		Frontend:        frontend,
 	}
+
 	return &config, nil
 }
