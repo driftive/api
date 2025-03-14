@@ -35,8 +35,9 @@ SELECT *
 FROM users
 WHERE provider = @provider
   AND access_token_expires_at IS NOT NULL
-  AND access_token_expires_at < @date LIMIT @maxResults
-OFFSET @queryOffset;
+  AND access_token_expires_at < @date
+  AND refresh_token_expires_at > NOW() + INTERVAL '1 day'
+LIMIT @maxResults OFFSET @queryOffset;
 
 -- name: UpdateUserTokens :one
 UPDATE users

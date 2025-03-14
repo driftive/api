@@ -42,16 +42,16 @@ func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody)
 
 	resp, err := client.R().
 		WithContext(ctx).
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Type", "application/json").
+		SetContentType("application/json").
+		SetHeader("Accept", "application/json").
 		SetBody(body).
-		SetResult(&github.AccessTokenResponse{}).
+		SetExpectResponseContentType("application/json").
+		SetResult(github.AccessTokenResponse{}).
 		Post(fmt.Sprintf("%s/login/oauth/access_token", r.cfg.GithubAppConfig.GithubURL))
 	if err != nil {
 		log.Errorf("error sending request: %v", err)
 		return nil, errors.New(refreshTokenRequestErr)
 	}
-
 	if resp.IsError() {
 		log.Errorf("error response status: %v", resp.Status())
 		return nil, errors.New(refreshTokenRequestErr)

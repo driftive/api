@@ -90,8 +90,9 @@ SELECT id, provider, provider_id, name, username, email, access_token, access_to
 FROM users
 WHERE provider = $1
   AND access_token_expires_at IS NOT NULL
-  AND access_token_expires_at < $2 LIMIT $4
-OFFSET $3
+  AND access_token_expires_at < $2
+  AND refresh_token_expires_at > NOW() + INTERVAL '1 day'
+LIMIT $4 OFFSET $3
 `
 
 type FindExpiringTokensByProviderParams struct {
