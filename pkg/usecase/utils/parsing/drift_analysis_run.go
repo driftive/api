@@ -18,7 +18,7 @@ func ToDriftAnalysisRunDTO(run queries.DriftAnalysisRun) dto.DriftAnalysisRunDTO
 }
 
 func ToDriftAnalysisRunDTOs(runs []queries.DriftAnalysisRun) []dto.DriftAnalysisRunDTO {
-	dtos := make([]dto.DriftAnalysisRunDTO, len(runs))
+	dtos := make([]dto.DriftAnalysisRunDTO, 0)
 	for _, run := range runs {
 		dtos = append(dtos, ToDriftAnalysisRunDTO(run))
 	}
@@ -39,7 +39,7 @@ func ToDriftAnalysisProjectDTO(project queries.DriftAnalysisProject) dto.DriftAn
 }
 
 func ToDriftAnalysisProjectDTOs(projects []queries.DriftAnalysisProject) []dto.DriftAnalysisProjectDTO {
-	dtos := make([]dto.DriftAnalysisProjectDTO, len(projects))
+	dtos := make([]dto.DriftAnalysisProjectDTO, 0)
 	for _, project := range projects {
 		dtos = append(dtos, ToDriftAnalysisProjectDTO(project))
 	}
