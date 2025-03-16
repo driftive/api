@@ -34,6 +34,7 @@ RETURNING *;
 SELECT *
 FROM users
 WHERE provider = @provider
+  AND access_token != ''
   AND access_token_expires_at IS NOT NULL
   AND access_token_expires_at < @date
   AND refresh_token_expires_at > NOW() + INTERVAL '1 day'

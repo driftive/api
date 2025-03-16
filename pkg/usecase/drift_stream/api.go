@@ -151,6 +151,7 @@ func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
 	}
 
 	runsDTO := parsing.ToDriftAnalysisRunDTOs(runs)
+	log.Infof("Found %d drift analysis runs for repository ID: %d", len(runsDTO), repoId)
 	return c.JSON(runsDTO)
 }
 
