@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/repository/queries"
 	"github.com/google/uuid"
@@ -29,10 +30,6 @@ func (r *DriftAnalysisRepo) CreateDriftAnalysisProject(ctx context.Context, para
 	return r.db.Queries(ctx).CreateDriftAnalysisProject(ctx, params)
 }
 
-func (r *DriftAnalysisRepo) WithTx(ctx context.Context, txFunc func(context.Context) error) error {
-	return r.db.WithTx(ctx, txFunc)
-}
-
 func (r *DriftAnalysisRepo) FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error) {
 	params := queries.FindDriftAnalysisRunsByRepositoryIdParams{
 		RepositoryID: repoId,
@@ -48,4 +45,8 @@ func (r *DriftAnalysisRepo) FindDriftAnalysisRunByUUID(ctx context.Context, uuid
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error) {
 	return r.db.Queries(ctx).FindDriftAnalysisProjectsByRunId(ctx, runId)
+}
+
+func (r *DriftAnalysisRepo) WithTx(ctx context.Context, txFunc func(context.Context) error) error {
+	return r.db.WithTx(ctx, txFunc)
 }
