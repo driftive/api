@@ -5,14 +5,14 @@ go 1.24
 require (
 	github.com/gofiber/contrib/jwt v1.0.10
 	github.com/gofiber/fiber/v2 v2.52.6
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/go-github/v67 v67.0.0
 	github.com/google/uuid v1.6.0
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.7.4
 	github.com/jferrl/go-githubauth v1.1.1
 	github.com/joho/godotenv v1.5.1
-	golang.org/x/oauth2 v0.28.0
-	resty.dev/v3 v3.0.0-beta.2
+	golang.org/x/oauth2 v0.30.0
+	resty.dev/v3 v3.0.0-beta.3
 )
 
 require (
