@@ -1,9 +1,10 @@
 package config
 
 import (
-	"driftive.cloud/api/pkg/utils"
 	"os"
 	"strconv"
+
+	"driftive.cloud/api/pkg/utils"
 )
 
 type Config struct {
