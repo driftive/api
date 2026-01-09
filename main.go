@@ -117,6 +117,7 @@ func main() {
 	v1.Get("/repo/:repo_id/token", func(c *fiber.Ctx) error { return repositoryHandler.GetRepoTokenById(c) })
 	v1.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error { return repositoryHandler.RegenerateToken(c) })
 	v1.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error { return driftStateHandler.ListRunsByRepoId(c) })
+	v1.Get("/repo/:repo_id/stats", func(c *fiber.Ctx) error { return driftStateHandler.GetRepositoryStats(c) })
 	v1.Get("/analysis/run/:run_id", func(c *fiber.Ctx) error { return driftStateHandler.GetRunById(c) })
 	v1.Post("/sync_user", func(c *fiber.Ctx) error { return userSync.HandleUserSyncRequest(c) })
 

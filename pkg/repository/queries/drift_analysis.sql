@@ -24,3 +24,18 @@ WHERE uuid = @uuid;
 SELECT *
 FROM drift_analysis_project
 WHERE drift_analysis_run_id = @drift_analysis_run_id;
+
+-- name: GetRepositoryRunStats :one
+SELECT
+    COUNT(*) AS total_runs,
+    COUNT(*) FILTER (WHERE total_projects_drifted > 0) AS runs_with_drift,
+    MAX(created_at) AS last_run_at
+FROM drift_analysis_run
+WHERE repository_id = @repository_id;
+
+-- name: GetLatestRunForRepository :one
+SELECT *
+FROM drift_analysis_run
+WHERE repository_id = @repository_id
+ORDER BY created_at DESC
+LIMIT 1;

@@ -27,3 +27,10 @@ type DriftAnalysisRunWithProjectsDTO struct {
 	DriftAnalysisRunDTO
 	Projects []DriftAnalysisProjectDTO `json:"projects"`
 }
+
+type RepositoryRunStatsDTO struct {
+	TotalRuns     int64                `json:"total_runs"`
+	RunsWithDrift int64                `json:"runs_with_drift"`
+	LastRunAt     *time.Time           `json:"last_run_at"`
+	LatestRun     *DriftAnalysisRunDTO `json:"latest_run"`
+}

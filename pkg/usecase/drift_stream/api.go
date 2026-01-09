@@ -2,6 +2,7 @@ package drift_stream
 
 import (
 	"context"
+	"driftive.cloud/api/pkg/model/dto"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/auth"
@@ -10,6 +11,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"time"
 )
 
 type DriftStateHandler struct {
@@ -194,4 +197,58 @@ func (d *DriftStateHandler) GetRunById(c *fiber.Ctx) error {
 
 	runDTO := parsing.ToDriftAnalysisRunWithProjectsDTO(run, projects)
 	return c.JSON(runDTO)
+}
+
+func (d *DriftStateHandler) GetRepositoryStats(c *fiber.Ctx) error {
+	userId, err := auth.MustGetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	repoIdStr := c.Params("repo_id")
+	if repoIdStr == "" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+	repoId := parsing.StringToInt64(repoIdStr)
+
+	// Check if user is a member of the organization
+	isMember, err := d.orgRepository.IsUserMemberOfOrganizationByRepoId(c.Context(), repoId, *userId)
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	if !isMember {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	stats, err := d.driftAnalysisRepository.GetRepositoryRunStats(c.Context(), repoId)
+	if err != nil {
+		log.Errorf("Error getting repository run stats: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	result := dto.RepositoryRunStatsDTO{
+		TotalRuns:     stats.TotalRuns,
+		RunsWithDrift: stats.RunsWithDrift,
+	}
+
+	// Handle last_run_at which can be nil
+	if stats.LastRunAt != nil {
+		if t, ok := stats.LastRunAt.(time.Time); ok {
+			result.LastRunAt = &t
+		}
+	}
+
+	// Get latest run details if there are runs
+	if stats.TotalRuns > 0 {
+		latestRun, err := d.driftAnalysisRepository.GetLatestRunForRepository(c.Context(), repoId)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			log.Errorf("Error getting latest run for repository: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+		if err == nil {
+			runDTO := parsing.ToDriftAnalysisRunDTO(latestRun)
+			result.LatestRun = &runDTO
+		}
+	}
+
+	return c.JSON(result)
 }

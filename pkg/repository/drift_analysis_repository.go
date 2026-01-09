@@ -14,6 +14,8 @@ type DriftAnalysisRepository interface {
 	FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error)
 	FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error)
 	FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error)
+	GetRepositoryRunStats(ctx context.Context, repoId int64) (queries.GetRepositoryRunStatsRow, error)
+	GetLatestRunForRepository(ctx context.Context, repoId int64) (queries.DriftAnalysisRun, error)
 
 	WithTx(ctx context.Context, txFunc func(context.Context) error) error
 }
@@ -45,6 +47,14 @@ func (r *DriftAnalysisRepo) FindDriftAnalysisRunByUUID(ctx context.Context, uuid
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error) {
 	return r.db.Queries(ctx).FindDriftAnalysisProjectsByRunId(ctx, runId)
+}
+
+func (r *DriftAnalysisRepo) GetRepositoryRunStats(ctx context.Context, repoId int64) (queries.GetRepositoryRunStatsRow, error) {
+	return r.db.Queries(ctx).GetRepositoryRunStats(ctx, repoId)
+}
+
+func (r *DriftAnalysisRepo) GetLatestRunForRepository(ctx context.Context, repoId int64) (queries.DriftAnalysisRun, error) {
+	return r.db.Queries(ctx).GetLatestRunForRepository(ctx, repoId)
 }
 
 func (r *DriftAnalysisRepo) WithTx(ctx context.Context, txFunc func(context.Context) error) error {

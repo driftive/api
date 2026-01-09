@@ -183,3 +183,48 @@ func (q *Queries) FindDriftAnalysisRunsByRepositoryId(ctx context.Context, arg F
 	}
 	return items, nil
 }
+
+const getLatestRunForRepository = `-- name: GetLatestRunForRepository :one
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
+FROM drift_analysis_run
+WHERE repository_id = $1
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetLatestRunForRepository(ctx context.Context, repositoryID int64) (DriftAnalysisRun, error) {
+	row := q.db.QueryRow(ctx, getLatestRunForRepository, repositoryID)
+	var i DriftAnalysisRun
+	err := row.Scan(
+		&i.Uuid,
+		&i.RepositoryID,
+		&i.TotalProjects,
+		&i.TotalProjectsDrifted,
+		&i.AnalysisDurationMillis,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getRepositoryRunStats = `-- name: GetRepositoryRunStats :one
+SELECT
+    COUNT(*) AS total_runs,
+    COUNT(*) FILTER (WHERE total_projects_drifted > 0) AS runs_with_drift,
+    MAX(created_at) AS last_run_at
+FROM drift_analysis_run
+WHERE repository_id = $1
+`
+
+type GetRepositoryRunStatsRow struct {
+	TotalRuns     int64
+	RunsWithDrift int64
+	LastRunAt     interface{}
+}
+
+func (q *Queries) GetRepositoryRunStats(ctx context.Context, repositoryID int64) (GetRepositoryRunStatsRow, error) {
+	row := q.db.QueryRow(ctx, getRepositoryRunStats, repositoryID)
+	var i GetRepositoryRunStatsRow
+	err := row.Scan(&i.TotalRuns, &i.RunsWithDrift, &i.LastRunAt)
+	return i, err
+}
