@@ -14,7 +14,8 @@ RETURNING *;
 -- name: FindGitRepositoriesByOrgId :many
 SELECT *
 FROM git_repository
-WHERE organization_id = @organization_id;
+WHERE organization_id = @organization_id
+ORDER BY (analysis_token IS NOT NULL) DESC, name ASC;
 
 -- name: FindGitRepositoryByOrgIdAndName :one
 SELECT *

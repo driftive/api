@@ -48,6 +48,7 @@ const findGitRepositoriesByOrgId = `-- name: FindGitRepositoriesByOrgId :many
 SELECT id, organization_id, provider_id, name, is_private, analysis_token
 FROM git_repository
 WHERE organization_id = $1
+ORDER BY (analysis_token IS NOT NULL) DESC, name ASC
 `
 
 func (q *Queries) FindGitRepositoriesByOrgId(ctx context.Context, organizationID int64) ([]GitRepository, error) {
