@@ -1,6 +1,6 @@
 module driftive.cloud/api
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/gofiber/contrib/jwt v1.1.2
@@ -9,7 +9,7 @@ require (
 	github.com/google/go-github/v81 v81.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/jferrl/go-githubauth v1.1.1
+	github.com/jferrl/go-githubauth v1.5.0
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/oauth2 v0.34.0
 	resty.dev/v3 v3.0.0-beta.6
@@ -18,7 +18,6 @@ require (
 require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0 // indirect
 	github.com/andybalholm/brotli v1.1.0 // indirect
-	github.com/google/go-github/v64 v64.0.0 // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
