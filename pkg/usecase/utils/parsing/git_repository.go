@@ -17,7 +17,7 @@ func ToGitRepositoryDTO(repository queries.GitRepository) dto.GitRepositoryDTO {
 }
 
 func ToGitRepositoryDTOs(repositories []queries.GitRepository) []dto.GitRepositoryDTO {
-	repoDTOs := make([]dto.GitRepositoryDTO, 0)
+	repoDTOs := make([]dto.GitRepositoryDTO, 0, len(repositories))
 	for _, repo := range repositories {
 		repoDTOs = append(repoDTOs, ToGitRepositoryDTO(repo))
 	}

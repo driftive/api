@@ -9,7 +9,7 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"errors"
 	"github.com/gofiber/fiber/v2/log"
-	"github.com/google/go-github/v67/github"
+	"github.com/google/go-github/v81/github"
 	"time"
 )
 
@@ -159,7 +159,7 @@ func (so SyncOrganization) SyncInstallationIdByOrgId(ctx context.Context, orgId 
 		return
 	}
 
-	err = so.orgRepository.UpdateOrgInstallationID(ctx, orgId, github.Int64(installation.GetID()))
+	err = so.orgRepository.UpdateOrgInstallationID(ctx, orgId, github.Ptr(installation.GetID()))
 	if err != nil {
 		log.Error("error updating installation id for org: ", orgId)
 		return

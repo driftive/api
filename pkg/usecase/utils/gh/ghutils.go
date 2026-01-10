@@ -2,18 +2,19 @@ package gh
 
 import (
 	"context"
-	"driftive.cloud/api/pkg/repository"
 	"encoding/base64"
-	"github.com/gofiber/fiber/v2/log"
-	"github.com/google/go-github/v67/github"
-	"github.com/jferrl/go-githubauth"
-	"golang.org/x/oauth2"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"driftive.cloud/api/pkg/repository"
+	"github.com/gofiber/fiber/v2/log"
+	"github.com/google/go-github/v81/github"
+	"github.com/jferrl/go-githubauth"
+	"golang.org/x/oauth2"
 )
 
 func NewDefaultGithubClient(token string) *github.Client {

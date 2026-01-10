@@ -16,7 +16,7 @@ func ToOrganizationDTO(organization queries.GitOrganization) dto.OrganizationDTO
 }
 
 func ToOrganizationDTOs(organizations []queries.GitOrganization) []dto.OrganizationDTO {
-	orgDTOs := make([]dto.OrganizationDTO, 0)
+	orgDTOs := make([]dto.OrganizationDTO, 0, len(organizations))
 	for _, org := range organizations {
 		orgDTOs = append(orgDTOs, ToOrganizationDTO(org))
 	}
