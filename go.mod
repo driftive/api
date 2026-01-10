@@ -10,6 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/jferrl/go-githubauth v1.5.0
+	github.com/jferrl/go-githubauth/v2 v2.0.0
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/oauth2 v0.34.0
 	resty.dev/v3 v3.0.0-beta.6
