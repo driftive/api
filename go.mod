@@ -3,7 +3,7 @@ module driftive.cloud/api
 go 1.24.0
 
 require (
-	github.com/gofiber/contrib/jwt v1.0.10
+	github.com/gofiber/contrib/jwt v1.1.2
 	github.com/gofiber/fiber/v2 v2.52.10
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/go-github/v67 v67.0.0
