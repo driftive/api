@@ -2,10 +2,10 @@ package auth
 
 import (
 	"driftive.cloud/api/pkg/repository"
+	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 type ProfileHandler struct {
@@ -17,12 +17,12 @@ func NewProfileHandler(userRepo repository.UserRepository) ProfileHandler {
 }
 
 func (h *ProfileHandler) GetLoggedUser(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	log.Info(claims)
+	userId, err := auth.MustGetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
-	userIdInt64 := int64(claims["user_id"].(float64))
-	dbUser, err := h.userRepo.FindUserByID(c.Context(), userIdInt64)
+	dbUser, err := h.userRepo.FindUserByID(c.Context(), *userId)
 	if err != nil {
 		log.Error("error finding user. ", err)
 		return c.SendStatus(fiber.StatusInternalServerError)

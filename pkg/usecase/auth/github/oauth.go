@@ -2,7 +2,17 @@ package github
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"time"
+
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/model/auth"
@@ -11,22 +21,26 @@ import (
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	"driftive.cloud/api/pkg/usecase/utils/jwt"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
-	"io"
-	"net/http"
-	"os"
-	"time"
+	gojwt "github.com/golang-jwt/jwt/v5"
 )
 
 const (
 	codeExchangeRequestErr        = "error exchanging gh code"
 	codeExchangeResponseReadErr   = "error reading gh code exchange response"
 	codeExchangePrepareRequestErr = "error preparing gh code exchange request"
+
+	nonceLength     = 16
+	stateExpiration = 10 * time.Minute
 )
+
+// OAuthStateClaims represents the JWT claims for OAuth state
+type OAuthStateClaims struct {
+	Nonce       string `json:"nonce"`
+	RedirectURL string `json:"redirect_url,omitempty"`
+	gojwt.RegisteredClaims
+}
 
 type OAuthHandler struct {
 	cfg                      config.Config
@@ -39,19 +53,93 @@ func NewOAuthHandler(cfg config.Config, db *db.DB, userRepo repository.UserRepos
 	return OAuthHandler{cfg: cfg, db: db, userRepository: userRepo, syncStatusUserRepository: syncRepo}
 }
 
+func generateNonce() (string, error) {
+	b := make([]byte, nonceLength)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
+}
+
+// generateStateJWT creates a signed JWT token containing the OAuth state
+func (o *OAuthHandler) generateStateJWT(redirectURL string) (string, error) {
+	nonce, err := generateNonce()
+	if err != nil {
+		return "", err
+	}
+
+	claims := OAuthStateClaims{
+		Nonce:       nonce,
+		RedirectURL: redirectURL,
+		RegisteredClaims: gojwt.RegisteredClaims{
+			ExpiresAt: gojwt.NewNumericDate(time.Now().Add(stateExpiration)),
+			IssuedAt:  gojwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := gojwt.NewWithClaims(gojwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(o.cfg.Auth.JwtSecret))
+}
+
+// validateStateJWT validates the JWT state token and returns the claims
+func (o *OAuthHandler) validateStateJWT(tokenString string) (*OAuthStateClaims, error) {
+	token, err := gojwt.ParseWithClaims(tokenString, &OAuthStateClaims{}, func(token *gojwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*gojwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(o.cfg.Auth.JwtSecret), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*OAuthStateClaims)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid state token")
+	}
+
+	return claims, nil
+}
+
 func (o *OAuthHandler) Authenticate(c *fiber.Ctx) error {
-	state := "test_state"
-	authUrl := fmt.
-		Sprintf("%s/login/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
-			o.cfg.GithubAppConfig.GithubURL, o.cfg.GithubAppConfig.ClientID, o.cfg.GithubAppConfig.CallbackURL, state)
+	// Optional redirect URL from query parameter
+	redirectURL := c.Query("redirect_url", "")
+
+	state, err := o.generateStateJWT(redirectURL)
+	if err != nil {
+		log.Error("error generating oauth state: ", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	authUrl := fmt.Sprintf("%s/login/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
+		o.cfg.GithubAppConfig.GithubURL, o.cfg.GithubAppConfig.ClientID, o.cfg.GithubAppConfig.CallbackURL, state)
 
 	return c.Redirect(authUrl, fiber.StatusFound)
 }
 
 func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 	ctx := c.Context()
+
+	// Validate OAuth state JWT
+	stateToken := c.Query("state")
+	if stateToken == "" {
+		log.Warn("OAuth state missing")
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "missing oauth state",
+		})
+	}
+
+	stateClaims, err := o.validateStateJWT(stateToken)
+	if err != nil {
+		log.Warnf("OAuth state validation failed: %v", err)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid oauth state",
+		})
+	}
+
 	code := c.Query("code")
-	log.Info("gh auth code: ", code)
 
 	epoch := time.Now().Unix()
 
@@ -66,8 +154,6 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 		log.Errorf("Failed to get user: %v", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
-
-	log.Debug("gh user: ", user)
 
 	err = o.db.WithTx(ctx, func(ctx context.Context) error {
 		if err != nil {
@@ -122,8 +208,14 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 
+		// Use redirect URL from state if provided, otherwise use default
+		redirectURL := o.cfg.Auth.LoginRedirectUrl
+		if stateClaims.RedirectURL != "" {
+			redirectURL = stateClaims.RedirectURL
+		}
+
 		return c.Redirect(
-			fmt.Sprintf("%s?token=%s", o.cfg.Auth.LoginRedirectUrl, jwtToken),
+			fmt.Sprintf("%s?token=%s", redirectURL, jwtToken),
 			fiber.StatusFound,
 		)
 	})
@@ -165,8 +257,6 @@ func (o *OAuthHandler) ExchangeCodeForToken(ctx context.Context, oauthCode strin
 		log.Error("error reading response body: ", err)
 		return nil, errors.New(codeExchangeResponseReadErr)
 	}
-
-	log.Info("gh code exchange response: ", string(respBody))
 
 	tokenResponse := github.AccessTokenResponse{}
 	err = json.Unmarshal(respBody, &tokenResponse)
