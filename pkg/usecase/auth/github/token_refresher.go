@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"driftive.cloud/api/pkg/config"
@@ -35,9 +36,19 @@ type RefreshTokenBody struct {
 }
 
 const (
-	refreshTokenRequestErr = "error refreshing token"
-	maxRefreshAttempts     = 5
+	refreshTokenRequestErr  = "error refreshing token"
+	maxRefreshAttempts      = 5
+	requestThrottleDelay    = 100 * time.Millisecond
+	defaultRateLimitBackoff = 60 * time.Second
 )
+
+type RateLimitError struct {
+	RetryAfter time.Duration
+}
+
+func (e *RateLimitError) Error() string {
+	return fmt.Sprintf("rate limited, retry after %v", e.RetryAfter)
+}
 
 func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody) (*github.AccessTokenResponse, error) {
 	client := resty.New()
@@ -55,12 +66,37 @@ func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody)
 		log.Errorf("error sending request: %v", err)
 		return nil, errors.New(refreshTokenRequestErr)
 	}
+
+	// Handle rate limiting (429 Too Many Requests)
+	if resp.StatusCode() == 429 {
+		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
+		log.Warnf("GitHub rate limit hit, retry after %v", retryAfter)
+		return nil, &RateLimitError{RetryAfter: retryAfter}
+	}
+
 	if resp.IsError() {
 		log.Errorf("error response status: %v", resp.Status())
 		return nil, errors.New(refreshTokenRequestErr)
 	}
 	tokenResponse := resp.Result().(*github.AccessTokenResponse)
 	return tokenResponse, nil
+}
+
+// parseRetryAfter parses GitHub's Retry-After header.
+// GitHub specifies this value in seconds (integer format).
+// See: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+func parseRetryAfter(header string) time.Duration {
+	if header == "" {
+		return defaultRateLimitBackoff
+	}
+
+	seconds, err := strconv.Atoi(header)
+	if err != nil {
+		log.Warnf("unexpected Retry-After header format: %s", header)
+		return defaultRateLimitBackoff
+	}
+
+	return time.Duration(seconds) * time.Second
 }
 
 func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) error {
@@ -72,8 +108,18 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 		RefreshToken: user.RefreshToken,
 		GrantType:    "refresh_token",
 	})
-	if err != nil || tokenResponse == nil || tokenResponse.AccessToken == "" || tokenResponse.RefreshToken == "" {
+	if err != nil {
+		// Propagate rate limit errors without counting as failure (not user's fault)
+		var rateLimitErr *RateLimitError
+		if errors.As(err, &rateLimitErr) {
+			return rateLimitErr
+		}
 		log.Errorf("error refreshing token: %v", err)
+		r.handleRefreshFailure(ctx, user)
+		return errors.New(refreshTokenRequestErr)
+	}
+	if tokenResponse == nil || tokenResponse.AccessToken == "" || tokenResponse.RefreshToken == "" {
+		log.Errorf("invalid token response for user %d", user.ID)
 		r.handleRefreshFailure(ctx, user)
 		return errors.New(refreshTokenRequestErr)
 	}
@@ -164,12 +210,32 @@ func (r *TokenRefresher) processExpiringTokens(ctx context.Context) {
 				// No more tokens to process
 				break
 			}
+
+			// Handle rate limiting - wait and continue
+			var rateLimitErr *RateLimitError
+			if errors.As(err, &rateLimitErr) {
+				log.Warnf("rate limited, waiting %v before continuing...", rateLimitErr.RetryAfter)
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(rateLimitErr.RetryAfter):
+					continue
+				}
+			}
+
 			log.Errorf("error processing token: %v", err)
 			break
 		}
 
 		if processed {
 			totalProcessed++
+
+			// Throttle requests to avoid hitting rate limits
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(requestThrottleDelay):
+			}
 		}
 	}
 
@@ -200,6 +266,12 @@ func (r *TokenRefresher) processOneToken(ctx context.Context, expiryThreshold ti
 
 	if err != nil {
 		return false, err
+	}
+
+	// Propagate rate limit errors to caller for proper handling
+	var rateLimitErr *RateLimitError
+	if errors.As(refreshErr, &rateLimitErr) {
+		return false, rateLimitErr
 	}
 
 	if refreshErr != nil {
