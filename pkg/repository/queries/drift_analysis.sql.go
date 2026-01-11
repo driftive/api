@@ -295,27 +295,45 @@ WITH project_states AS (
         dap.dir,
         dar.created_at,
         dap.drifted,
-        LAG(dap.drifted) OVER (PARTITION BY dap.dir ORDER BY dar.created_at) AS prev_drifted,
-        LAG(dar.created_at) OVER (PARTITION BY dap.dir ORDER BY dar.created_at) AS prev_created_at
+        LAG(dap.drifted) OVER (PARTITION BY dap.dir ORDER BY dar.created_at) AS prev_drifted
     FROM drift_analysis_project dap
     JOIN drift_analysis_run dar ON dap.drift_analysis_run_id = dar.uuid
     WHERE dar.repository_id = $1
-      AND dar.created_at >= NOW() - ($2::INTEGER || ' days')::INTERVAL
 ),
-resolutions AS (
+transitions AS (
     SELECT
         dir,
-        created_at AS resolved_at,
-        prev_created_at AS drifted_at,
-        EXTRACT(EPOCH FROM (created_at - prev_created_at)) / 3600 AS hours_to_resolve
+        created_at,
+        drifted,
+        CASE WHEN (prev_drifted IS NULL OR prev_drifted = false) AND drifted = true THEN created_at END AS drift_start,
+        CASE WHEN prev_drifted = true AND drifted = false THEN created_at END AS drift_end
     FROM project_states
-    WHERE prev_drifted = true AND drifted = false
+),
+drift_starts AS (
+    SELECT dir, drift_start, ROW_NUMBER() OVER (PARTITION BY dir ORDER BY drift_start) AS start_num
+    FROM transitions
+    WHERE drift_start IS NOT NULL
+),
+drift_ends AS (
+    SELECT dir, drift_end, ROW_NUMBER() OVER (PARTITION BY dir ORDER BY drift_end) AS end_num
+    FROM transitions
+    WHERE drift_end IS NOT NULL
+),
+matched_resolutions AS (
+    SELECT
+        e.dir,
+        s.drift_start,
+        e.drift_end AS resolved_at,
+        EXTRACT(EPOCH FROM (e.drift_end - s.drift_start)) / 3600 AS hours_to_resolve
+    FROM drift_ends e
+    JOIN drift_starts s ON e.dir = s.dir AND e.end_num = s.start_num
+    WHERE e.drift_end >= NOW() - ($2::INTEGER || ' days')::INTERVAL
 )
 SELECT
     DATE(resolved_at) AS date,
     COUNT(*)::BIGINT AS resolutions_count,
     AVG(hours_to_resolve) AS avg_hours_to_resolve
-FROM resolutions
+FROM matched_resolutions
 GROUP BY DATE(resolved_at)
 ORDER BY DATE(resolved_at) ASC
 `
@@ -331,7 +349,11 @@ type GetMeanTimeToResolutionRow struct {
 	AvgHoursToResolve float64
 }
 
-// Returns drift resolution times by tracking when a drifted project becomes non-drifted
+// Returns drift resolution times by tracking from when drift STARTED to when it was resolved
+// Mark transitions: drift_start when going from not-drifted to drifted, drift_end when going from drifted to not-drifted
+// Get drift start times
+// Get drift end times
+// Match each resolution with its corresponding drift start
 func (q *Queries) GetMeanTimeToResolution(ctx context.Context, arg GetMeanTimeToResolutionParams) ([]GetMeanTimeToResolutionRow, error) {
 	rows, err := q.db.Query(ctx, getMeanTimeToResolution, arg.RepositoryID, arg.DaysBack)
 	if err != nil {
