@@ -2,15 +2,17 @@ package github
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"time"
+
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/model/auth/github"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
-	"errors"
-	"fmt"
 	"github.com/gofiber/fiber/v2/log"
+	"github.com/jackc/pgx/v5"
 	"resty.dev/v3"
-	"time"
 )
 
 type TokenRefresher struct {
@@ -34,6 +36,7 @@ type RefreshTokenBody struct {
 
 const (
 	refreshTokenRequestErr = "error refreshing token"
+	maxRefreshAttempts     = 5
 )
 
 func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody) (*github.AccessTokenResponse, error) {
@@ -71,6 +74,7 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 	})
 	if err != nil || tokenResponse == nil || tokenResponse.AccessToken == "" || tokenResponse.RefreshToken == "" {
 		log.Errorf("error refreshing token: %v", err)
+		r.handleRefreshFailure(ctx, user)
 		return errors.New(refreshTokenRequestErr)
 	}
 
@@ -102,40 +106,105 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 	return nil
 }
 
-func (r *TokenRefresher) RefreshTokens() {
-	log.Info("starting token refresher")
-	var fetchedUsers int
-	for {
-		log.Info("fetching users with expiring tokens...")
-		ctx := context.Background()
+func (r *TokenRefresher) handleRefreshFailure(ctx context.Context, user *queries.User) {
+	updatedUser, err := r.userRepository.IncrementTokenRefreshAttempts(ctx, user.ID)
+	if err != nil {
+		log.Errorf("error incrementing refresh attempts for user %d: %v", user.ID, err)
+		return
+	}
 
-		dateParam := time.Now().Add(30 * time.Minute)
-
-		params := queries.FindExpiringTokensByProviderParams{
-			Provider:    "GITHUB",
-			Queryoffset: 0,
-			Maxresults:  20,
-			Date:        &dateParam,
-		}
-
-		users, err := r.userRepository.FindExpiringTokensByProvider(ctx, params)
+	if updatedUser.TokenRefreshAttempts >= maxRefreshAttempts {
+		log.Warnf("disabling token refresh for user %d after %d failed attempts", user.ID, updatedUser.TokenRefreshAttempts)
+		_, err = r.userRepository.DisableTokenRefresh(ctx, user.ID)
 		if err != nil {
-			log.Errorf("error fetching users: %v", err)
-			continue
+			log.Errorf("error disabling token refresh for user %d: %v", user.ID, err)
 		}
+	} else {
+		log.Warnf("token refresh failed for user %d (attempt %d/%d)", user.ID, updatedUser.TokenRefreshAttempts, maxRefreshAttempts)
+	}
+}
 
-		fetchedUsers = len(users)
+func (r *TokenRefresher) RefreshTokens(ctx context.Context) {
+	log.Info("starting token refresher")
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
 
-		for _, user := range users {
-			err := r.RefreshToken(ctx, &user)
-			if err != nil {
-				log.Errorf("error refreshing token: %v", err)
-			}
-		}
+	// Run immediately on start, then on ticker
+	r.processExpiringTokens(ctx)
 
-		if fetchedUsers == 0 {
-			log.Info("sleeping for 10 minutes...")
-			time.Sleep(10 * time.Minute)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info("token refresher shutting down...")
+			return
+		case <-ticker.C:
+			r.processExpiringTokens(ctx)
 		}
 	}
+}
+
+func (r *TokenRefresher) processExpiringTokens(ctx context.Context) {
+	log.Info("checking for expiring tokens...")
+
+	dateParam := time.Now().Add(30 * time.Minute)
+	var totalProcessed int
+
+	// Process tokens one at a time with row locking for multi-instance safety
+	for {
+		// Check for cancellation between iterations
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		processed, err := r.processOneToken(ctx, dateParam)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				// No more tokens to process
+				break
+			}
+			log.Errorf("error processing token: %v", err)
+			break
+		}
+
+		if processed {
+			totalProcessed++
+		}
+	}
+
+	if totalProcessed == 0 {
+		log.Info("no expiring tokens found")
+	} else {
+		log.Infof("processed %d expiring tokens", totalProcessed)
+	}
+}
+
+func (r *TokenRefresher) processOneToken(ctx context.Context, expiryThreshold time.Time) (bool, error) {
+	var user queries.User
+	var refreshErr error
+
+	err := r.userRepository.WithTx(ctx, func(txCtx context.Context) error {
+		var err error
+		user, err = r.userRepository.FindAndLockExpiringToken(txCtx, queries.FindAndLockExpiringTokenParams{
+			Provider: "GITHUB",
+			Date:     &expiryThreshold,
+		})
+		if err != nil {
+			return err
+		}
+
+		refreshErr = r.RefreshToken(txCtx, &user)
+		return nil // Always commit to release the lock; refresh failure is handled separately
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	if refreshErr != nil {
+		log.Errorf("error refreshing token for user %d: %v", user.ID, refreshErr)
+	}
+
+	return true, nil
 }

@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"driftive.cloud/api/pkg/config"
@@ -139,10 +142,26 @@ func main() {
 	ghG.Get("/orgs", func(c *fiber.Ctx) error { return organizationHandler.ListGitOrganizations(c) })
 	ghG.Get("/org", func(c *fiber.Ctx) error { return organizationHandler.GetOrgByNameAndProvider(c, model.GitHubProvider) })
 
-	// Start background jobs
-	go ghTokenRefresher.RefreshTokens()
+	// Setup graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start background jobs with cancellable context
+	go ghTokenRefresher.RefreshTokens(ctx)
 	go userSync.StartSyncLoop()
 	go orgSync.StartSyncLoop()
+
+	// Handle shutdown signals
+	go func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+		log.Info("shutdown signal received, stopping background jobs...")
+		cancel()
+		if err := app.Shutdown(); err != nil {
+			log.Errorf("error shutting down server: %v", err)
+		}
+	}()
 
 	port := utils.GetEnvOrDefault("PORT", "3000")
 	err = app.Listen(fmt.Sprintf(":%s", port))

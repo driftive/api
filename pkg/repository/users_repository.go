@@ -12,7 +12,11 @@ type UserRepository interface {
 	CreateOrUpdateUser(ctx context.Context, arg queries.CreateOrUpdateUserParams) (queries.User, error)
 	FindUserByProviderAndProviderId(ctx context.Context, arg queries.FindUserByProviderAndProviderIdParams) (queries.User, error)
 	FindExpiringTokensByProvider(ctx context.Context, arg queries.FindExpiringTokensByProviderParams) ([]queries.User, error)
+	FindAndLockExpiringToken(ctx context.Context, arg queries.FindAndLockExpiringTokenParams) (queries.User, error)
 	UpdateUserTokens(ctx context.Context, arg queries.UpdateUserTokensParams) (queries.User, error)
+	IncrementTokenRefreshAttempts(ctx context.Context, id int64) (queries.User, error)
+	DisableTokenRefresh(ctx context.Context, id int64) (queries.User, error)
+	WithTx(ctx context.Context, fn func(context.Context) error) error
 }
 
 type UserRepo struct {
@@ -39,6 +43,22 @@ func (r *UserRepo) FindExpiringTokensByProvider(ctx context.Context, arg queries
 	return r.db.Queries(ctx).FindExpiringTokensByProvider(ctx, arg)
 }
 
+func (r *UserRepo) FindAndLockExpiringToken(ctx context.Context, arg queries.FindAndLockExpiringTokenParams) (queries.User, error) {
+	return r.db.Queries(ctx).FindAndLockExpiringToken(ctx, arg)
+}
+
 func (r *UserRepo) UpdateUserTokens(ctx context.Context, arg queries.UpdateUserTokensParams) (queries.User, error) {
 	return r.db.Queries(ctx).UpdateUserTokens(ctx, arg)
+}
+
+func (r *UserRepo) IncrementTokenRefreshAttempts(ctx context.Context, id int64) (queries.User, error) {
+	return r.db.Queries(ctx).IncrementTokenRefreshAttempts(ctx, id)
+}
+
+func (r *UserRepo) DisableTokenRefresh(ctx context.Context, id int64) (queries.User, error) {
+	return r.db.Queries(ctx).DisableTokenRefresh(ctx, id)
+}
+
+func (r *UserRepo) WithTx(ctx context.Context, fn func(context.Context) error) error {
+	return r.db.WithTx(ctx, fn)
 }

@@ -42,7 +42,7 @@ UPDATE SET
     access_token_expires_at = $7,
     refresh_token = $8,
     refresh_token_expires_at = $9
-RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
 `
 
 type CreateOrUpdateUserParams struct {
@@ -81,18 +81,85 @@ func (q *Queries) CreateOrUpdateUser(ctx context.Context, arg CreateOrUpdateUser
 		&i.AccessTokenExpiresAt,
 		&i.RefreshToken,
 		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
 	)
 	return i, err
 }
 
-const findExpiringTokensByProvider = `-- name: FindExpiringTokensByProvider :many
-SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+const disableTokenRefresh = `-- name: DisableTokenRefresh :one
+UPDATE users
+SET token_refresh_disabled_at = NOW()
+WHERE id = $1 RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
+`
+
+func (q *Queries) DisableTokenRefresh(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, disableTokenRefresh, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.ProviderID,
+		&i.Name,
+		&i.Username,
+		&i.Email,
+		&i.AccessToken,
+		&i.AccessTokenExpiresAt,
+		&i.RefreshToken,
+		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
+	)
+	return i, err
+}
+
+const findAndLockExpiringToken = `-- name: FindAndLockExpiringToken :one
+SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
 FROM users
 WHERE provider = $1
   AND access_token != ''
   AND access_token_expires_at IS NOT NULL
   AND access_token_expires_at < $2
   AND refresh_token_expires_at > NOW() + INTERVAL '1 day'
+  AND token_refresh_disabled_at IS NULL
+LIMIT 1
+FOR UPDATE SKIP LOCKED
+`
+
+type FindAndLockExpiringTokenParams struct {
+	Provider string
+	Date     *time.Time
+}
+
+func (q *Queries) FindAndLockExpiringToken(ctx context.Context, arg FindAndLockExpiringTokenParams) (User, error) {
+	row := q.db.QueryRow(ctx, findAndLockExpiringToken, arg.Provider, arg.Date)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.ProviderID,
+		&i.Name,
+		&i.Username,
+		&i.Email,
+		&i.AccessToken,
+		&i.AccessTokenExpiresAt,
+		&i.RefreshToken,
+		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
+	)
+	return i, err
+}
+
+const findExpiringTokensByProvider = `-- name: FindExpiringTokensByProvider :many
+SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
+FROM users
+WHERE provider = $1
+  AND access_token != ''
+  AND access_token_expires_at IS NOT NULL
+  AND access_token_expires_at < $2
+  AND refresh_token_expires_at > NOW() + INTERVAL '1 day'
+  AND token_refresh_disabled_at IS NULL
 LIMIT $4 OFFSET $3
 `
 
@@ -128,6 +195,8 @@ func (q *Queries) FindExpiringTokensByProvider(ctx context.Context, arg FindExpi
 			&i.AccessTokenExpiresAt,
 			&i.RefreshToken,
 			&i.RefreshTokenExpiresAt,
+			&i.TokenRefreshAttempts,
+			&i.TokenRefreshDisabledAt,
 		); err != nil {
 			return nil, err
 		}
@@ -140,7 +209,7 @@ func (q *Queries) FindExpiringTokensByProvider(ctx context.Context, arg FindExpi
 }
 
 const findUserByID = `-- name: FindUserByID :one
-SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
 FROM users
 WHERE id = $1
 `
@@ -159,12 +228,14 @@ func (q *Queries) FindUserByID(ctx context.Context, id int64) (User, error) {
 		&i.AccessTokenExpiresAt,
 		&i.RefreshToken,
 		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
 	)
 	return i, err
 }
 
 const findUserByProviderAndProviderId = `-- name: FindUserByProviderAndProviderId :one
-SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+SELECT id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
 FROM users
 WHERE provider = $1
   AND provider_id = $2
@@ -189,17 +260,47 @@ func (q *Queries) FindUserByProviderAndProviderId(ctx context.Context, arg FindU
 		&i.AccessTokenExpiresAt,
 		&i.RefreshToken,
 		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
+	)
+	return i, err
+}
+
+const incrementTokenRefreshAttempts = `-- name: IncrementTokenRefreshAttempts :one
+UPDATE users
+SET token_refresh_attempts = token_refresh_attempts + 1
+WHERE id = $1 RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
+`
+
+func (q *Queries) IncrementTokenRefreshAttempts(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRow(ctx, incrementTokenRefreshAttempts, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.ProviderID,
+		&i.Name,
+		&i.Username,
+		&i.Email,
+		&i.AccessToken,
+		&i.AccessTokenExpiresAt,
+		&i.RefreshToken,
+		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
 	)
 	return i, err
 }
 
 const updateUserTokens = `-- name: UpdateUserTokens :one
 UPDATE users
-SET access_token             = $1,
-    access_token_expires_at  = $2,
-    refresh_token            = $3,
-    refresh_token_expires_at = $4
-WHERE id = $5 RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at
+SET access_token               = $1,
+    access_token_expires_at    = $2,
+    refresh_token              = $3,
+    refresh_token_expires_at   = $4,
+    token_refresh_attempts     = 0,
+    token_refresh_disabled_at  = NULL
+WHERE id = $5 RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
 `
 
 type UpdateUserTokensParams struct {
@@ -230,6 +331,8 @@ func (q *Queries) UpdateUserTokens(ctx context.Context, arg UpdateUserTokensPara
 		&i.AccessTokenExpiresAt,
 		&i.RefreshToken,
 		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
 	)
 	return i, err
 }

@@ -65,16 +65,18 @@ type SyncStatusUser struct {
 }
 
 type User struct {
-	ID                    int64
-	Provider              string
-	ProviderID            string
-	Name                  string
-	Username              string
-	Email                 string
-	AccessToken           string
-	AccessTokenExpiresAt  *time.Time
-	RefreshToken          string
-	RefreshTokenExpiresAt *time.Time
+	ID                     int64
+	Provider               string
+	ProviderID             string
+	Name                   string
+	Username               string
+	Email                  string
+	AccessToken            string
+	AccessTokenExpiresAt   *time.Time
+	RefreshToken           string
+	RefreshTokenExpiresAt  *time.Time
+	TokenRefreshAttempts   int32
+	TokenRefreshDisabledAt *time.Time
 }
 
 type UserGitOrganization struct {
