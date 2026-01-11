@@ -7,8 +7,10 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createDriftAnalysisProject = `-- name: CreateDriftAnalysisProject :one
@@ -184,6 +186,86 @@ func (q *Queries) FindDriftAnalysisRunsByRepositoryId(ctx context.Context, arg F
 	return items, nil
 }
 
+const getDriftFreeStreak = `-- name: GetDriftFreeStreak :one
+WITH ranked_runs AS (
+    SELECT
+        uuid,
+        total_projects_drifted,
+        created_at,
+        ROW_NUMBER() OVER (ORDER BY created_at DESC) AS rn
+    FROM drift_analysis_run
+    WHERE repository_id = $1
+),
+first_drift AS (
+    SELECT MIN(rn) AS break_point
+    FROM ranked_runs
+    WHERE total_projects_drifted > 0
+)
+SELECT
+    COALESCE(
+        (SELECT break_point - 1 FROM first_drift WHERE break_point IS NOT NULL),
+        (SELECT COUNT(*) FROM ranked_runs)
+    )::BIGINT AS streak_count,
+    (SELECT created_at FROM ranked_runs WHERE rn = 1) AS last_run_at
+`
+
+type GetDriftFreeStreakRow struct {
+	StreakCount int64
+	LastRunAt   time.Time
+}
+
+// Returns the current consecutive run count without drift
+func (q *Queries) GetDriftFreeStreak(ctx context.Context, repositoryID int64) (GetDriftFreeStreakRow, error) {
+	row := q.db.QueryRow(ctx, getDriftFreeStreak, repositoryID)
+	var i GetDriftFreeStreakRow
+	err := row.Scan(&i.StreakCount, &i.LastRunAt)
+	return i, err
+}
+
+const getDriftRateOverTime = `-- name: GetDriftRateOverTime :many
+SELECT
+    DATE(created_at) AS date,
+    COUNT(*)::BIGINT AS total_runs,
+    COUNT(*) FILTER (WHERE total_projects_drifted > 0)::BIGINT AS runs_with_drift
+FROM drift_analysis_run
+WHERE repository_id = $1
+  AND created_at >= NOW() - ($2::INTEGER || ' days')::INTERVAL
+GROUP BY DATE(created_at)
+ORDER BY DATE(created_at) ASC
+`
+
+type GetDriftRateOverTimeParams struct {
+	RepositoryID int64
+	DaysBack     int32
+}
+
+type GetDriftRateOverTimeRow struct {
+	Date          pgtype.Date
+	TotalRuns     int64
+	RunsWithDrift int64
+}
+
+// Returns daily drift rate data for the specified time range
+func (q *Queries) GetDriftRateOverTime(ctx context.Context, arg GetDriftRateOverTimeParams) ([]GetDriftRateOverTimeRow, error) {
+	rows, err := q.db.Query(ctx, getDriftRateOverTime, arg.RepositoryID, arg.DaysBack)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDriftRateOverTimeRow
+	for rows.Next() {
+		var i GetDriftRateOverTimeRow
+		if err := rows.Scan(&i.Date, &i.TotalRuns, &i.RunsWithDrift); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestRunForRepository = `-- name: GetLatestRunForRepository :one
 SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
 FROM drift_analysis_run
@@ -205,6 +287,124 @@ func (q *Queries) GetLatestRunForRepository(ctx context.Context, repositoryID in
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const getMeanTimeToResolution = `-- name: GetMeanTimeToResolution :many
+WITH project_states AS (
+    SELECT
+        dap.dir,
+        dar.created_at,
+        dap.drifted,
+        LAG(dap.drifted) OVER (PARTITION BY dap.dir ORDER BY dar.created_at) AS prev_drifted,
+        LAG(dar.created_at) OVER (PARTITION BY dap.dir ORDER BY dar.created_at) AS prev_created_at
+    FROM drift_analysis_project dap
+    JOIN drift_analysis_run dar ON dap.drift_analysis_run_id = dar.uuid
+    WHERE dar.repository_id = $1
+      AND dar.created_at >= NOW() - ($2::INTEGER || ' days')::INTERVAL
+),
+resolutions AS (
+    SELECT
+        dir,
+        created_at AS resolved_at,
+        prev_created_at AS drifted_at,
+        EXTRACT(EPOCH FROM (created_at - prev_created_at)) / 3600 AS hours_to_resolve
+    FROM project_states
+    WHERE prev_drifted = true AND drifted = false
+)
+SELECT
+    DATE(resolved_at) AS date,
+    COUNT(*)::BIGINT AS resolutions_count,
+    AVG(hours_to_resolve) AS avg_hours_to_resolve
+FROM resolutions
+GROUP BY DATE(resolved_at)
+ORDER BY DATE(resolved_at) ASC
+`
+
+type GetMeanTimeToResolutionParams struct {
+	RepositoryID int64
+	DaysBack     int32
+}
+
+type GetMeanTimeToResolutionRow struct {
+	Date              pgtype.Date
+	ResolutionsCount  int64
+	AvgHoursToResolve float64
+}
+
+// Returns drift resolution times by tracking when a drifted project becomes non-drifted
+func (q *Queries) GetMeanTimeToResolution(ctx context.Context, arg GetMeanTimeToResolutionParams) ([]GetMeanTimeToResolutionRow, error) {
+	rows, err := q.db.Query(ctx, getMeanTimeToResolution, arg.RepositoryID, arg.DaysBack)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMeanTimeToResolutionRow
+	for rows.Next() {
+		var i GetMeanTimeToResolutionRow
+		if err := rows.Scan(&i.Date, &i.ResolutionsCount, &i.AvgHoursToResolve); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getMostFrequentlyDriftedProjects = `-- name: GetMostFrequentlyDriftedProjects :many
+SELECT
+    dap.dir,
+    dap.type,
+    COUNT(*) FILTER (WHERE dap.drifted = true)::BIGINT AS drift_count,
+    COUNT(*)::BIGINT AS total_appearances
+FROM drift_analysis_project dap
+JOIN drift_analysis_run dar ON dap.drift_analysis_run_id = dar.uuid
+WHERE dar.repository_id = $1
+  AND dar.created_at >= NOW() - ($2::INTEGER || ' days')::INTERVAL
+GROUP BY dap.dir, dap.type
+HAVING COUNT(*) FILTER (WHERE dap.drifted = true) > 0
+ORDER BY drift_count DESC
+LIMIT $3
+`
+
+type GetMostFrequentlyDriftedProjectsParams struct {
+	RepositoryID int64
+	DaysBack     int32
+	MaxResults   int32
+}
+
+type GetMostFrequentlyDriftedProjectsRow struct {
+	Dir              string
+	Type             string
+	DriftCount       int64
+	TotalAppearances int64
+}
+
+// Returns projects ranked by how often they drift (top N)
+func (q *Queries) GetMostFrequentlyDriftedProjects(ctx context.Context, arg GetMostFrequentlyDriftedProjectsParams) ([]GetMostFrequentlyDriftedProjectsRow, error) {
+	rows, err := q.db.Query(ctx, getMostFrequentlyDriftedProjects, arg.RepositoryID, arg.DaysBack, arg.MaxResults)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetMostFrequentlyDriftedProjectsRow
+	for rows.Next() {
+		var i GetMostFrequentlyDriftedProjectsRow
+		if err := rows.Scan(
+			&i.Dir,
+			&i.Type,
+			&i.DriftCount,
+			&i.TotalAppearances,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getRepositoryRunStats = `-- name: GetRepositoryRunStats :one

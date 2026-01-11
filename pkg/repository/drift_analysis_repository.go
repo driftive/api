@@ -17,6 +17,12 @@ type DriftAnalysisRepository interface {
 	GetRepositoryRunStats(ctx context.Context, repoId int64) (queries.GetRepositoryRunStatsRow, error)
 	GetLatestRunForRepository(ctx context.Context, repoId int64) (queries.DriftAnalysisRun, error)
 
+	// Trend analytics methods
+	GetDriftRateOverTime(ctx context.Context, repoId int64, daysBack int32) ([]queries.GetDriftRateOverTimeRow, error)
+	GetMostFrequentlyDriftedProjects(ctx context.Context, repoId int64, daysBack int32, maxResults int32) ([]queries.GetMostFrequentlyDriftedProjectsRow, error)
+	GetDriftFreeStreak(ctx context.Context, repoId int64) (queries.GetDriftFreeStreakRow, error)
+	GetMeanTimeToResolution(ctx context.Context, repoId int64, daysBack int32) ([]queries.GetMeanTimeToResolutionRow, error)
+
 	WithTx(ctx context.Context, txFunc func(context.Context) error) error
 }
 
@@ -59,4 +65,30 @@ func (r *DriftAnalysisRepo) GetLatestRunForRepository(ctx context.Context, repoI
 
 func (r *DriftAnalysisRepo) WithTx(ctx context.Context, txFunc func(context.Context) error) error {
 	return r.db.WithTx(ctx, txFunc)
+}
+
+func (r *DriftAnalysisRepo) GetDriftRateOverTime(ctx context.Context, repoId int64, daysBack int32) ([]queries.GetDriftRateOverTimeRow, error) {
+	return r.db.Queries(ctx).GetDriftRateOverTime(ctx, queries.GetDriftRateOverTimeParams{
+		RepositoryID: repoId,
+		DaysBack:     daysBack,
+	})
+}
+
+func (r *DriftAnalysisRepo) GetMostFrequentlyDriftedProjects(ctx context.Context, repoId int64, daysBack int32, maxResults int32) ([]queries.GetMostFrequentlyDriftedProjectsRow, error) {
+	return r.db.Queries(ctx).GetMostFrequentlyDriftedProjects(ctx, queries.GetMostFrequentlyDriftedProjectsParams{
+		RepositoryID: repoId,
+		DaysBack:     daysBack,
+		MaxResults:   maxResults,
+	})
+}
+
+func (r *DriftAnalysisRepo) GetDriftFreeStreak(ctx context.Context, repoId int64) (queries.GetDriftFreeStreakRow, error) {
+	return r.db.Queries(ctx).GetDriftFreeStreak(ctx, repoId)
+}
+
+func (r *DriftAnalysisRepo) GetMeanTimeToResolution(ctx context.Context, repoId int64, daysBack int32) ([]queries.GetMeanTimeToResolutionRow, error) {
+	return r.db.Queries(ctx).GetMeanTimeToResolution(ctx, queries.GetMeanTimeToResolutionParams{
+		RepositoryID: repoId,
+		DaysBack:     daysBack,
+	})
 }

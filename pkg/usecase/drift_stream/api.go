@@ -252,3 +252,99 @@ func (d *DriftStateHandler) GetRepositoryStats(c *fiber.Ctx) error {
 
 	return c.JSON(result)
 }
+
+func (d *DriftStateHandler) GetRepositoryTrends(c *fiber.Ctx) error {
+	userId, err := auth.MustGetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	repoIdStr := c.Params("repo_id")
+	if repoIdStr == "" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+	repoId := parsing.StringToInt64(repoIdStr)
+
+	// Check if user is a member of the organization
+	isMember, err := d.orgRepository.IsUserMemberOfOrganizationByRepoId(c.Context(), repoId, *userId)
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	if !isMember {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	// Parse days_back query param (default 30, max 90)
+	daysBack := int32(c.QueryInt("days_back", 30))
+	if daysBack < 1 {
+		daysBack = 30
+	}
+	if daysBack > 90 {
+		daysBack = 90
+	}
+
+	// Fetch drift rate over time
+	driftRate, err := d.driftAnalysisRepository.GetDriftRateOverTime(c.Context(), repoId, daysBack)
+	if err != nil {
+		log.Errorf("Error getting drift rate: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	// Fetch most frequently drifted projects
+	frequentlyDrifted, err := d.driftAnalysisRepository.GetMostFrequentlyDriftedProjects(c.Context(), repoId, daysBack, 10)
+	if err != nil {
+		log.Errorf("Error getting frequently drifted projects: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	// Fetch drift-free streak
+	var streakDTO dto.DriftFreeStreakDTO
+	streak, err := d.driftAnalysisRepository.GetDriftFreeStreak(c.Context(), repoId)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			log.Errorf("Error getting drift-free streak: %v", err)
+		}
+		streakDTO = dto.DriftFreeStreakDTO{StreakCount: 0}
+	} else {
+		streakDTO = parsing.ToDriftFreeStreakDTO(streak)
+	}
+
+	// Fetch mean time to resolution
+	resolutionTimes, err := d.driftAnalysisRepository.GetMeanTimeToResolution(c.Context(), repoId, daysBack)
+	if err != nil {
+		log.Errorf("Error getting resolution times: %v", err)
+		resolutionTimes = nil
+	}
+
+	// Calculate summary statistics
+	driftRateData := parsing.ToDriftRateDataPoints(driftRate)
+	var totalRuns int64
+	var runsWithDrift int64
+	for _, dp := range driftRateData {
+		totalRuns += dp.TotalRuns
+		runsWithDrift += dp.RunsWithDrift
+	}
+
+	driftRatePercent := float64(0)
+	if totalRuns > 0 {
+		driftRatePercent = float64(runsWithDrift) / float64(totalRuns) * 100
+	}
+
+	summary := dto.TrendsSummaryDTO{
+		TotalRuns:        totalRuns,
+		RunsWithDrift:    runsWithDrift,
+		DriftRatePercent: driftRatePercent,
+		StreakCount:      streakDTO.StreakCount,
+	}
+
+	response := dto.RepositoryTrendsDTO{
+		Summary:                   summary,
+		DriftRateOverTime:         driftRateData,
+		FrequentlyDriftedProjects: parsing.ToFrequentlyDriftedProjects(frequentlyDrifted),
+		DriftFreeStreak:           streakDTO,
+		ResolutionTimes:           parsing.ToResolutionTimeDataPoints(resolutionTimes),
+		DaysBack:                  int(daysBack),
+	}
+
+	return c.JSON(response)
+}
