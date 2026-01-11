@@ -9,7 +9,7 @@ import (
 type UserRepository interface {
 	FindUserByID(ctx context.Context, id int64) (queries.User, error)
 	CountUsersByProviderAndProviderId(ctx context.Context, arg queries.CountUsersByProviderAndProviderIdParams) (int64, error)
-	CreateOrUpdateUser(ctx context.Context, arg queries.CreateOrUpdateUserParams) (queries.User, error)
+	UpsertUserOnLogin(ctx context.Context, arg queries.UpsertUserOnLoginParams) (queries.User, error)
 	FindUserByProviderAndProviderId(ctx context.Context, arg queries.FindUserByProviderAndProviderIdParams) (queries.User, error)
 	FindExpiringTokensByProvider(ctx context.Context, arg queries.FindExpiringTokensByProviderParams) ([]queries.User, error)
 	FindAndLockExpiringToken(ctx context.Context, arg queries.FindAndLockExpiringTokenParams) (queries.User, error)
@@ -31,8 +31,8 @@ func (r *UserRepo) CountUsersByProviderAndProviderId(ctx context.Context, arg qu
 	return r.db.Queries(ctx).CountUsersByProviderAndProviderId(ctx, arg)
 }
 
-func (r *UserRepo) CreateOrUpdateUser(ctx context.Context, arg queries.CreateOrUpdateUserParams) (queries.User, error) {
-	return r.db.Queries(ctx).CreateOrUpdateUser(ctx, arg)
+func (r *UserRepo) UpsertUserOnLogin(ctx context.Context, arg queries.UpsertUserOnLoginParams) (queries.User, error) {
+	return r.db.Queries(ctx).UpsertUserOnLogin(ctx, arg)
 }
 
 func (r *UserRepo) FindUserByProviderAndProviderId(ctx context.Context, arg queries.FindUserByProviderAndProviderIdParams) (queries.User, error) {

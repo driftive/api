@@ -15,7 +15,7 @@ FROM users
 WHERE provider = $1
   AND provider_id = $2;
 
--- name: CreateOrUpdateUser :one
+-- name: UpsertUserOnLogin :one
 INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token,
                    refresh_token_expires_at)
 VALUES (@provider, @provider_id, @name, @username, @email, @access_token, @access_token_expires_at, @refresh_token,
@@ -27,7 +27,9 @@ UPDATE SET
     access_token = @access_token,
     access_token_expires_at = @access_token_expires_at,
     refresh_token = @refresh_token,
-    refresh_token_expires_at = @refresh_token_expires_at
+    refresh_token_expires_at = @refresh_token_expires_at,
+    token_refresh_attempts = 0,
+    token_refresh_disabled_at = NULL
 RETURNING *;
 
 -- name: FindExpiringTokensByProvider :many

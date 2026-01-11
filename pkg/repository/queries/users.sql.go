@@ -29,64 +29,6 @@ func (q *Queries) CountUsersByProviderAndProviderId(ctx context.Context, arg Cou
 	return count, err
 }
 
-const createOrUpdateUser = `-- name: CreateOrUpdateUser :one
-INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token,
-                   refresh_token_expires_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-        $9) ON CONFLICT (provider, provider_id) DO
-UPDATE SET
-    name = $3,
-    username = $4,
-    email = $5,
-    access_token = $6,
-    access_token_expires_at = $7,
-    refresh_token = $8,
-    refresh_token_expires_at = $9
-RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
-`
-
-type CreateOrUpdateUserParams struct {
-	Provider              string
-	ProviderID            string
-	Name                  string
-	Username              string
-	Email                 string
-	AccessToken           string
-	AccessTokenExpiresAt  *time.Time
-	RefreshToken          string
-	RefreshTokenExpiresAt *time.Time
-}
-
-func (q *Queries) CreateOrUpdateUser(ctx context.Context, arg CreateOrUpdateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, createOrUpdateUser,
-		arg.Provider,
-		arg.ProviderID,
-		arg.Name,
-		arg.Username,
-		arg.Email,
-		arg.AccessToken,
-		arg.AccessTokenExpiresAt,
-		arg.RefreshToken,
-		arg.RefreshTokenExpiresAt,
-	)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.Provider,
-		&i.ProviderID,
-		&i.Name,
-		&i.Username,
-		&i.Email,
-		&i.AccessToken,
-		&i.AccessTokenExpiresAt,
-		&i.RefreshToken,
-		&i.RefreshTokenExpiresAt,
-		&i.TokenRefreshAttempts,
-		&i.TokenRefreshDisabledAt,
-	)
-	return i, err
-}
-
 const disableTokenRefresh = `-- name: DisableTokenRefresh :one
 UPDATE users
 SET token_refresh_disabled_at = NOW()
@@ -318,6 +260,66 @@ func (q *Queries) UpdateUserTokens(ctx context.Context, arg UpdateUserTokensPara
 		arg.RefreshToken,
 		arg.RefreshTokenExpiresAt,
 		arg.ID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Provider,
+		&i.ProviderID,
+		&i.Name,
+		&i.Username,
+		&i.Email,
+		&i.AccessToken,
+		&i.AccessTokenExpiresAt,
+		&i.RefreshToken,
+		&i.RefreshTokenExpiresAt,
+		&i.TokenRefreshAttempts,
+		&i.TokenRefreshDisabledAt,
+	)
+	return i, err
+}
+
+const upsertUserOnLogin = `-- name: UpsertUserOnLogin :one
+INSERT INTO users (provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token,
+                   refresh_token_expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
+        $9) ON CONFLICT (provider, provider_id) DO
+UPDATE SET
+    name = $3,
+    username = $4,
+    email = $5,
+    access_token = $6,
+    access_token_expires_at = $7,
+    refresh_token = $8,
+    refresh_token_expires_at = $9,
+    token_refresh_attempts = 0,
+    token_refresh_disabled_at = NULL
+RETURNING id, provider, provider_id, name, username, email, access_token, access_token_expires_at, refresh_token, refresh_token_expires_at, token_refresh_attempts, token_refresh_disabled_at
+`
+
+type UpsertUserOnLoginParams struct {
+	Provider              string
+	ProviderID            string
+	Name                  string
+	Username              string
+	Email                 string
+	AccessToken           string
+	AccessTokenExpiresAt  *time.Time
+	RefreshToken          string
+	RefreshTokenExpiresAt *time.Time
+}
+
+func (q *Queries) UpsertUserOnLogin(ctx context.Context, arg UpsertUserOnLoginParams) (User, error) {
+	row := q.db.QueryRow(ctx, upsertUserOnLogin,
+		arg.Provider,
+		arg.ProviderID,
+		arg.Name,
+		arg.Username,
+		arg.Email,
+		arg.AccessToken,
+		arg.AccessTokenExpiresAt,
+		arg.RefreshToken,
+		arg.RefreshTokenExpiresAt,
 	)
 	var i User
 	err := row.Scan(

@@ -163,7 +163,7 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 		accessTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.ExpiresIn), 0)
 		refreshTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.RefreshTokenExpiresIn), 0)
 
-		createUserParams := queries.CreateOrUpdateUserParams{
+		upsertUserParams := queries.UpsertUserOnLoginParams{
 			Provider:              "GITHUB",
 			ProviderID:            fmt.Sprintf("%d", user.GetID()),
 			Name:                  user.GetName(),
@@ -175,7 +175,7 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 			RefreshTokenExpiresAt: &refreshTokenExpiresAt,
 		}
 
-		_, err = o.userRepository.CreateOrUpdateUser(ctx, createUserParams)
+		_, err = o.userRepository.UpsertUserOnLogin(ctx, upsertUserParams)
 		if err != nil {
 			return err
 		}
