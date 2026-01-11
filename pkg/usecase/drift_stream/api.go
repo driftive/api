@@ -5,6 +5,7 @@ import (
 	"driftive.cloud/api/pkg/model/dto"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
+	"driftive.cloud/api/pkg/usecase/cleanup"
 	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"errors"
@@ -19,16 +20,19 @@ type DriftStateHandler struct {
 	orgRepository           repository.GitOrgRepository
 	repoRepository          repository.GitRepositoryRepository
 	driftAnalysisRepository repository.DriftAnalysisRepository
+	cleanupService          *cleanup.CleanupService
 }
 
 func NewDriftStateHandler(
 	orgRepository repository.GitOrgRepository,
 	repoRepository repository.GitRepositoryRepository,
-	driftAnalysisRepo repository.DriftAnalysisRepository) *DriftStateHandler {
+	driftAnalysisRepo repository.DriftAnalysisRepository,
+	cleanupService *cleanup.CleanupService) *DriftStateHandler {
 	return &DriftStateHandler{
 		orgRepository:           orgRepository,
 		repoRepository:          repoRepository,
 		driftAnalysisRepository: driftAnalysisRepo,
+		cleanupService:          cleanupService,
 	}
 }
 
@@ -117,6 +121,13 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 	if err != nil {
 		log.Errorf("Error handling drift state update: %v", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	// Trigger cleanup after successful insert (non-blocking, log errors but don't fail the request)
+	if d.cleanupService != nil {
+		if cleanupErr := d.cleanupService.CleanupRepositoryRuns(c.Context(), repo.ID); cleanupErr != nil {
+			log.Warnf("Cleanup failed for repository %d: %v", repo.ID, cleanupErr)
+		}
 	}
 
 	return c.SendStatus(fiber.StatusOK)

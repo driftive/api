@@ -88,6 +88,27 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 	return i, err
 }
 
+const deleteOldestRunsExceedingLimit = `-- name: DeleteOldestRunsExceedingLimit :exec
+DELETE FROM drift_analysis_run dar
+WHERE dar.uuid IN (
+    SELECT r.uuid FROM drift_analysis_run r
+    WHERE r.repository_id = $1
+    ORDER BY r.created_at DESC
+    OFFSET $2
+)
+`
+
+type DeleteOldestRunsExceedingLimitParams struct {
+	RepositoryID  int64
+	MaxRunsToKeep int32
+}
+
+// Deletes the oldest runs for a repository, keeping only the most recent N runs
+func (q *Queries) DeleteOldestRunsExceedingLimit(ctx context.Context, arg DeleteOldestRunsExceedingLimitParams) error {
+	_, err := q.db.Exec(ctx, deleteOldestRunsExceedingLimit, arg.RepositoryID, arg.MaxRunsToKeep)
+	return err
+}
+
 const findDriftAnalysisProjectsByRunId = `-- name: FindDriftAnalysisProjectsByRunId :many
 SELECT id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output
 FROM drift_analysis_project

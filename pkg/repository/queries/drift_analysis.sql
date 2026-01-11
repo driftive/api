@@ -143,3 +143,13 @@ SELECT
 FROM matched_resolutions
 GROUP BY DATE(resolved_at)
 ORDER BY DATE(resolved_at) ASC;
+
+-- name: DeleteOldestRunsExceedingLimit :exec
+-- Deletes the oldest runs for a repository, keeping only the most recent N runs
+DELETE FROM drift_analysis_run dar
+WHERE dar.uuid IN (
+    SELECT r.uuid FROM drift_analysis_run r
+    WHERE r.repository_id = @repository_id
+    ORDER BY r.created_at DESC
+    OFFSET @max_runs_to_keep
+);

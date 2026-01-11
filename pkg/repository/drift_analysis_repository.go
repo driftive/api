@@ -23,6 +23,9 @@ type DriftAnalysisRepository interface {
 	GetDriftFreeStreak(ctx context.Context, repoId int64) (queries.GetDriftFreeStreakRow, error)
 	GetMeanTimeToResolution(ctx context.Context, repoId int64, daysBack int32) ([]queries.GetMeanTimeToResolutionRow, error)
 
+	// Cleanup methods
+	DeleteOldestRunsExceedingLimit(ctx context.Context, repoId int64, maxRunsToKeep int32) error
+
 	WithTx(ctx context.Context, txFunc func(context.Context) error) error
 }
 
@@ -90,5 +93,12 @@ func (r *DriftAnalysisRepo) GetMeanTimeToResolution(ctx context.Context, repoId 
 	return r.db.Queries(ctx).GetMeanTimeToResolution(ctx, queries.GetMeanTimeToResolutionParams{
 		RepositoryID: repoId,
 		DaysBack:     daysBack,
+	})
+}
+
+func (r *DriftAnalysisRepo) DeleteOldestRunsExceedingLimit(ctx context.Context, repoId int64, maxRunsToKeep int32) error {
+	return r.db.Queries(ctx).DeleteOldestRunsExceedingLimit(ctx, queries.DeleteOldestRunsExceedingLimitParams{
+		RepositoryID:  repoId,
+		MaxRunsToKeep: maxRunsToKeep,
 	})
 }

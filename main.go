@@ -2,6 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"time"
+
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/middleware/perms"
@@ -9,13 +13,14 @@ import (
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/auth"
 	"driftive.cloud/api/pkg/usecase/auth/github"
+	"driftive.cloud/api/pkg/usecase/cleanup"
 	"driftive.cloud/api/pkg/usecase/drift_stream"
 	"driftive.cloud/api/pkg/usecase/orgs"
 	"driftive.cloud/api/pkg/usecase/repos"
 	github3 "driftive.cloud/api/pkg/usecase/sync/org/github"
 	github2 "driftive.cloud/api/pkg/usecase/sync/user_resources/github"
 	"driftive.cloud/api/pkg/utils"
-	"fmt"
+
 	jwtware "github.com/gofiber/contrib/jwt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
@@ -25,7 +30,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/joho/godotenv"
-	"time"
 )
 
 func jwtError(c *fiber.Ctx, err error) error {
@@ -84,11 +88,20 @@ func main() {
 	ghTokenRefresher := github.NewTokenRefresher(*cfg, userRepo)
 	userSync := github2.NewUserResourceSyncer(userRepo, orgRepo, repoRepo, syncStatusUserRepo, orgSyncRepo)
 
+	// cleanup service
+	maxRunsPerRepo := int32(400)
+	if envMaxRuns := utils.GetEnvOrDefault("MAX_RUNS_PER_REPO", ""); envMaxRuns != "" {
+		if parsed, err := strconv.Atoi(envMaxRuns); err == nil {
+			maxRunsPerRepo = int32(parsed)
+		}
+	}
+	cleanupService := cleanup.NewCleanupService(driftRepo, maxRunsPerRepo)
+
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
 	repositoryHandler := repos.NewGitRepositoryHandler(orgRepo, repoRepo, userRepo)
-	driftStateHandler := drift_stream.NewDriftStateHandler(orgRepo, repoRepo, driftRepo)
+	driftStateHandler := drift_stream.NewDriftStateHandler(orgRepo, repoRepo, driftRepo, cleanupService)
 	profileHandler := auth.NewProfileHandler(userRepo)
 
 	// Public routes
