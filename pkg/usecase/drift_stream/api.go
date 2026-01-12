@@ -2,6 +2,7 @@ package drift_stream
 
 import (
 	"context"
+	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/model/dto"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
@@ -9,6 +10,7 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"errors"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
@@ -17,18 +19,27 @@ import (
 )
 
 type DriftStateHandler struct {
+	cfg                     *config.Config
 	orgRepository           repository.GitOrgRepository
 	repoRepository          repository.GitRepositoryRepository
 	driftAnalysisRepository repository.DriftAnalysisRepository
 	cleanupService          *cleanup.CleanupService
 }
 
+// DriftAnalysisResponse is the response returned after a successful drift analysis upload
+type DriftAnalysisResponse struct {
+	RunID        string `json:"run_id"`
+	DashboardURL string `json:"dashboard_url"`
+}
+
 func NewDriftStateHandler(
+	cfg *config.Config,
 	orgRepository repository.GitOrgRepository,
 	repoRepository repository.GitRepositoryRepository,
 	driftAnalysisRepo repository.DriftAnalysisRepository,
 	cleanupService *cleanup.CleanupService) *DriftStateHandler {
 	return &DriftStateHandler{
+		cfg:                     cfg,
 		orgRepository:           orgRepository,
 		repoRepository:          repoRepository,
 		driftAnalysisRepository: driftAnalysisRepo,
@@ -68,6 +79,13 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 	}
 	log.Infof("Handling drift state update for repository: %s", repo.Name)
 
+	// Fetch organization to build dashboard URL
+	org, err := d.orgRepository.FindGitOrgById(c.Context(), repo.OrganizationID)
+	if err != nil {
+		log.Errorf("Error finding organization by ID: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
 	var state DriftDetectionResult
 	if err := c.BodyParser(&state); err != nil {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -75,6 +93,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 
 	log.Debugf("Received drift state update: %v", state)
 
+	var runUUID uuid.UUID
 	err = d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
 		params := queries.CreateDriftAnalysisRunParams{
 			Uuid:                   uuid.New(),
@@ -89,6 +108,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 			log.Errorf("Error creating drift analysis run: %v", err)
 			return err
 		}
+		runUUID = run.Uuid
 
 		for _, project := range state.ProjectResults {
 			projectType, err := projectTypeToDBString(project.Project.Type)
@@ -130,7 +150,21 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.SendStatus(fiber.StatusOK)
+	// Build dashboard URL: /:provider/:org/:repo/run/:run_uuid
+	dashboardURL := fmt.Sprintf("%s/%s/%s/%s/run/%s",
+		d.cfg.Frontend.FrontendURL,
+		org.Provider,
+		org.Name,
+		repo.Name,
+		runUUID.String(),
+	)
+
+	response := DriftAnalysisResponse{
+		RunID:        runUUID.String(),
+		DashboardURL: dashboardURL,
+	}
+
+	return c.JSON(response)
 }
 
 func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
