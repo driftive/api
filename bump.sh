@@ -32,31 +32,24 @@ if [ "$LOCAL" != "$REMOTE" ]; then
 fi
 echo "✓ Branch is up to date with origin/main"
 
-# Get all tags matching semantic version format (with optional beta suffix)
+# Get the latest stable tag (excluding beta versions)
 # Sort by version and get the latest
-LATEST_TAG=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[0-9]+)?$' | sort -V | tail -1)
+LATEST_STABLE_TAG=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
 
-if [ -z "$LATEST_TAG" ]; then
-    echo "No tags found, starting with v0.1.0"
+if [ -z "$LATEST_STABLE_TAG" ]; then
+    echo "No stable tags found, starting with v0.1.0"
     NEW_VERSION="v0.1.0"
 else
-    echo "Latest tag: $LATEST_TAG"
+    echo "Latest stable tag: $LATEST_STABLE_TAG"
 
-    # Check if it's a beta version
-    if [[ $LATEST_TAG =~ -beta\.[0-9]+$ ]]; then
-        # Remove beta suffix to get stable version
-        NEW_VERSION=$(echo "$LATEST_TAG" | sed 's/-beta\.[0-9]*$//')
-        echo "Latest is beta, bumping to stable version: $NEW_VERSION"
-    else
-        # Parse version components (remove 'v' prefix)
-        VERSION=${LATEST_TAG#v}
-        IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+    # Parse version components (remove 'v' prefix)
+    VERSION=${LATEST_STABLE_TAG#v}
+    IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
 
-        # Bump minor version and reset patch to 0
-        MINOR=$((MINOR + 1))
-        NEW_VERSION="v${MAJOR}.${MINOR}.0"
-        echo "Bumping minor version: $LATEST_TAG -> $NEW_VERSION"
-    fi
+    # Bump minor version and reset patch to 0
+    MINOR=$((MINOR + 1))
+    NEW_VERSION="v${MAJOR}.${MINOR}.0"
+    echo "Bumping minor version: $LATEST_STABLE_TAG -> $NEW_VERSION"
 fi
 
 echo ""
