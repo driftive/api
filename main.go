@@ -13,6 +13,7 @@ import (
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/middleware/perms"
 	"driftive.cloud/api/pkg/model"
+	"driftive.cloud/api/pkg/observability"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/auth"
 	"driftive.cloud/api/pkg/usecase/auth/github"
@@ -55,6 +56,22 @@ func main() {
 	if err != nil {
 		log.Panic("error loading configs. ", err)
 	}
+
+	// Initialize metrics
+	var metricsShutdown func()
+	if gcpProjectID := utils.GetEnvOrDefault("GCP_PROJECT_ID", ""); gcpProjectID != "" {
+		_, metricsShutdown, err = observability.InitMetrics(context.Background(), gcpProjectID)
+		if err != nil {
+			log.Warnf("failed to initialize GCP metrics, using noop: %v", err)
+			observability.InitMetricsNoop()
+		} else {
+			log.Info("GCP metrics initialized")
+		}
+	} else {
+		log.Info("GCP_PROJECT_ID not set, using noop metrics")
+		observability.InitMetricsNoop()
+	}
+
 	db_ := db.NewDB(*cfg)
 
 	err = db_.Pool.Ping(context.Background())
@@ -104,7 +121,7 @@ func main() {
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
 	repositoryHandler := repos.NewGitRepositoryHandler(orgRepo, repoRepo, userRepo)
-	driftStateHandler := drift_stream.NewDriftStateHandler(orgRepo, repoRepo, driftRepo, cleanupService)
+	driftStateHandler := drift_stream.NewDriftStateHandler(cfg, orgRepo, repoRepo, driftRepo, cleanupService)
 	profileHandler := auth.NewProfileHandler(userRepo)
 
 	// Public routes
@@ -158,6 +175,9 @@ func main() {
 		<-sigChan
 		log.Info("shutdown signal received, stopping background jobs...")
 		cancel()
+		if metricsShutdown != nil {
+			metricsShutdown()
+		}
 		if err := app.Shutdown(); err != nil {
 			log.Errorf("error shutting down server: %v", err)
 		}

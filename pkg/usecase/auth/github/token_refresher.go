@@ -9,6 +9,7 @@ import (
 
 	"driftive.cloud/api/pkg/config"
 	"driftive.cloud/api/pkg/model/auth/github"
+	"driftive.cloud/api/pkg/observability"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"github.com/gofiber/fiber/v2/log"
@@ -19,12 +20,19 @@ import (
 type TokenRefresher struct {
 	cfg            config.Config
 	userRepository repository.UserRepository
+	httpClient     *resty.Client
 }
 
 func NewTokenRefresher(cfg config.Config, userRepository repository.UserRepository) *TokenRefresher {
+	client := resty.New().
+		SetTimeout(30*time.Second).
+		SetHeader("Content-Type", "application/json").
+		SetHeader("Accept", "application/json")
+
 	return &TokenRefresher{
 		cfg:            cfg,
 		userRepository: userRepository,
+		httpClient:     client,
 	}
 }
 
@@ -51,13 +59,8 @@ func (e *RateLimitError) Error() string {
 }
 
 func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody) (*github.AccessTokenResponse, error) {
-	client := resty.New()
-	defer client.Close()
-
-	resp, err := client.R().
+	resp, err := r.httpClient.R().
 		WithContext(ctx).
-		SetContentType("application/json").
-		SetHeader("Accept", "application/json").
 		SetBody(body).
 		SetExpectResponseContentType("application/json").
 		SetResult(github.AccessTokenResponse{}).
@@ -71,6 +74,9 @@ func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody)
 	if resp.StatusCode() == 429 {
 		retryAfter := parseRetryAfter(resp.Header().Get("Retry-After"))
 		log.Warnf("GitHub rate limit hit, retry after %v", retryAfter)
+		if metrics := observability.GetMetrics(); metrics != nil {
+			metrics.TokenRefreshRateLimit.Add(ctx, 1)
+		}
 		return nil, &RateLimitError{RetryAfter: retryAfter}
 	}
 
@@ -101,6 +107,11 @@ func parseRetryAfter(header string) time.Duration {
 
 func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) error {
 	now := time.Now()
+	metrics := observability.GetMetrics()
+
+	if metrics != nil {
+		metrics.TokenRefreshTotal.Add(ctx, 1)
+	}
 
 	tokenResponse, err := r.SendHttpReq(ctx, RefreshTokenBody{
 		ClientId:     r.cfg.GithubAppConfig.ClientID,
@@ -116,11 +127,17 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 		}
 		log.Errorf("error refreshing token: %v", err)
 		r.handleRefreshFailure(ctx, user)
+		if metrics != nil {
+			metrics.TokenRefreshFailure.Add(ctx, 1)
+		}
 		return errors.New(refreshTokenRequestErr)
 	}
 	if tokenResponse == nil || tokenResponse.AccessToken == "" || tokenResponse.RefreshToken == "" {
 		log.Errorf("invalid token response for user %d", user.ID)
 		r.handleRefreshFailure(ctx, user)
+		if metrics != nil {
+			metrics.TokenRefreshFailure.Add(ctx, 1)
+		}
 		return errors.New(refreshTokenRequestErr)
 	}
 
@@ -148,6 +165,10 @@ func (r *TokenRefresher) RefreshToken(ctx context.Context, user *queries.User) e
 		return errors.New(refreshTokenRequestErr)
 	}
 
+	if metrics != nil {
+		metrics.TokenRefreshSuccess.Add(ctx, 1)
+	}
+
 	log.Infof("token refreshed for user: %d", user.ID)
 	return nil
 }
@@ -164,6 +185,9 @@ func (r *TokenRefresher) handleRefreshFailure(ctx context.Context, user *queries
 		_, err = r.userRepository.DisableTokenRefresh(ctx, user.ID)
 		if err != nil {
 			log.Errorf("error disabling token refresh for user %d: %v", user.ID, err)
+		}
+		if metrics := observability.GetMetrics(); metrics != nil {
+			metrics.TokenRefreshDisabled.Add(ctx, 1)
 		}
 	} else {
 		log.Warnf("token refresh failed for user %d (attempt %d/%d)", user.ID, updatedUser.TokenRefreshAttempts, maxRefreshAttempts)
