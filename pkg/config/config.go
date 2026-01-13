@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"driftive.cloud/api/pkg/utils"
 )
@@ -35,6 +36,10 @@ type AuthConfig struct {
 	// LoginRedirectUrl is the URL to redirect to after login. Default is http://localhost:3001/login/success. It should be the URL of the frontend
 	LoginRedirectUrl string
 	JwtSecret        string
+	// AllowedRedirectOrigins is a list of allowed origins for OAuth redirects.
+	// If empty, only LoginRedirectUrl origin is allowed.
+	// Example: ["https://app.driftive.io", "http://localhost:3001"]
+	AllowedRedirectOrigins []string
 }
 
 type FrontendConfig struct {
@@ -69,9 +74,21 @@ func LoadConfig() (*Config, error) {
 		GithubURL:    os.Getenv("GITHUB_URL"),
 	}
 
+	// Parse allowed redirect origins from comma-separated env var
+	var allowedRedirectOrigins []string
+	if originsEnv := os.Getenv("ALLOWED_REDIRECT_ORIGINS"); originsEnv != "" {
+		for _, origin := range strings.Split(originsEnv, ",") {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				allowedRedirectOrigins = append(allowedRedirectOrigins, origin)
+			}
+		}
+	}
+
 	auth := AuthConfig{
-		LoginRedirectUrl: utils.GetEnvOrDefault("LOGIN_REDIRECT_URL", "http://localhost:3001/login/success"),
-		JwtSecret:        utils.GetEnvOrDefault("JWT_SECRET", ""),
+		LoginRedirectUrl:       utils.GetEnvOrDefault("LOGIN_REDIRECT_URL", "http://localhost:3001/login/success"),
+		JwtSecret:              utils.GetEnvOrDefault("JWT_SECRET", ""),
+		AllowedRedirectOrigins: allowedRedirectOrigins,
 	}
 
 	frontend := FrontendConfig{
