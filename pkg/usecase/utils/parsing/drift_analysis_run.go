@@ -11,6 +11,7 @@ func ToDriftAnalysisRunDTO(run queries.DriftAnalysisRun) dto.DriftAnalysisRunDTO
 		RepositoryId:         run.RepositoryID,
 		TotalProjects:        run.TotalProjects,
 		TotalProjectsDrifted: run.TotalProjectsDrifted,
+		TotalProjectsErrored: run.TotalProjectsErrored,
 		DurationMillis:       run.AnalysisDurationMillis,
 		CreatedAt:            run.CreatedAt,
 		UpdatedAt:            run.UpdatedAt,

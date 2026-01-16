@@ -29,6 +29,7 @@ type DriftAnalysisRun struct {
 	AnalysisDurationMillis int64
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
+	TotalProjectsErrored   int32
 }
 
 type GitOrganization struct {

@@ -46,6 +46,7 @@ type DriftProjectResult struct {
 type DriftDetectionResult struct {
 	ProjectResults []DriftProjectResult `json:"project_results"`
 	TotalDrifted   int32                `json:"total_drifted"`
+	TotalErrored   *int32               `json:"total_errored,omitempty"`
 	TotalProjects  int32                `json:"total_projects"`
 	TotalChecked   int32                `json:"total_checked"`
 	Duration       time.Duration        `json:"duration"`

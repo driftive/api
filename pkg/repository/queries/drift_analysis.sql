@@ -1,6 +1,6 @@
 -- name: CreateDriftAnalysisRun :one
-INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis)
-VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @analysis_duration_millis)
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, analysis_duration_millis)
+VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @total_projects_errored, @analysis_duration_millis)
 RETURNING *;
 
 -- name: CreateDriftAnalysisProject :one

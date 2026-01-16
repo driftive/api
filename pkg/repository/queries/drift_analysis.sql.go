@@ -54,9 +54,9 @@ func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDrif
 }
 
 const createDriftAnalysisRun = `-- name: CreateDriftAnalysisRun :one
-INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, analysis_duration_millis)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
 `
 
 type CreateDriftAnalysisRunParams struct {
@@ -64,6 +64,7 @@ type CreateDriftAnalysisRunParams struct {
 	RepositoryID           int64
 	TotalProjects          int32
 	TotalProjectsDrifted   int32
+	TotalProjectsErrored   int32
 	AnalysisDurationMillis int64
 }
 
@@ -73,6 +74,7 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 		arg.RepositoryID,
 		arg.TotalProjects,
 		arg.TotalProjectsDrifted,
+		arg.TotalProjectsErrored,
 		arg.AnalysisDurationMillis,
 	)
 	var i DriftAnalysisRun
@@ -84,6 +86,7 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 		&i.AnalysisDurationMillis,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotalProjectsErrored,
 	)
 	return i, err
 }
@@ -152,7 +155,7 @@ func (q *Queries) FindDriftAnalysisProjectsByRunId(ctx context.Context, driftAna
 }
 
 const findDriftAnalysisRunByUUID = `-- name: FindDriftAnalysisRunByUUID :one
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
 FROM drift_analysis_run
 WHERE uuid = $1
 `
@@ -168,12 +171,13 @@ func (q *Queries) FindDriftAnalysisRunByUUID(ctx context.Context, argUuid uuid.U
 		&i.AnalysisDurationMillis,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotalProjectsErrored,
 	)
 	return i, err
 }
 
 const findDriftAnalysisRunsByRepositoryId = `-- name: FindDriftAnalysisRunsByRepositoryId :many
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
 FROM drift_analysis_run
 WHERE repository_id = $1
 ORDER BY created_at DESC
@@ -203,6 +207,7 @@ func (q *Queries) FindDriftAnalysisRunsByRepositoryId(ctx context.Context, arg F
 			&i.AnalysisDurationMillis,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.TotalProjectsErrored,
 		); err != nil {
 			return nil, err
 		}
@@ -295,7 +300,7 @@ func (q *Queries) GetDriftRateOverTime(ctx context.Context, arg GetDriftRateOver
 }
 
 const getLatestRunForRepository = `-- name: GetLatestRunForRepository :one
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
 FROM drift_analysis_run
 WHERE repository_id = $1
 ORDER BY created_at DESC
@@ -313,6 +318,7 @@ func (q *Queries) GetLatestRunForRepository(ctx context.Context, repositoryID in
 		&i.AnalysisDurationMillis,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotalProjectsErrored,
 	)
 	return i, err
 }

@@ -93,6 +93,18 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 
 	log.Debugf("Received drift state update: %v", state)
 
+	// Use sent value or calculate errored count from project results as fallback
+	var totalErrored int32
+	if state.TotalErrored != nil {
+		totalErrored = *state.TotalErrored
+	} else {
+		for _, project := range state.ProjectResults {
+			if !project.Succeeded {
+				totalErrored++
+			}
+		}
+	}
+
 	var runUUID uuid.UUID
 	err = d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
 		params := queries.CreateDriftAnalysisRunParams{
@@ -100,6 +112,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 			RepositoryID:           repo.ID,
 			TotalProjects:          state.TotalProjects,
 			TotalProjectsDrifted:   state.TotalDrifted,
+			TotalProjectsErrored:   totalErrored,
 			AnalysisDurationMillis: state.Duration.Milliseconds(),
 		}
 

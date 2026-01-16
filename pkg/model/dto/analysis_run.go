@@ -7,6 +7,7 @@ type DriftAnalysisRunDTO struct {
 	RepositoryId         int64     `json:"repository_id"`
 	TotalProjects        int32     `json:"total_projects"`
 	TotalProjectsDrifted int32     `json:"total_projects_drifted"`
+	TotalProjectsErrored int32     `json:"total_projects_errored"`
 	DurationMillis       int64     `json:"duration_millis"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
