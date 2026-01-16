@@ -23,7 +23,14 @@ WHERE uuid = @uuid;
 -- name: FindDriftAnalysisProjectsByRunId :many
 SELECT *
 FROM drift_analysis_project
-WHERE drift_analysis_run_id = @drift_analysis_run_id;
+WHERE drift_analysis_run_id = @drift_analysis_run_id
+ORDER BY
+    CASE
+        WHEN succeeded = false THEN 0  -- Errored first
+        WHEN drifted = true THEN 1     -- Drifted second
+        ELSE 2                         -- OK last
+    END,
+    dir ASC;
 
 -- name: GetRepositoryRunStats :one
 SELECT

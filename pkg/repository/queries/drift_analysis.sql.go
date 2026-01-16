@@ -113,6 +113,13 @@ const findDriftAnalysisProjectsByRunId = `-- name: FindDriftAnalysisProjectsByRu
 SELECT id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output
 FROM drift_analysis_project
 WHERE drift_analysis_run_id = $1
+ORDER BY
+    CASE
+        WHEN succeeded = false THEN 0  -- Errored first
+        WHEN drifted = true THEN 1     -- Drifted second
+        ELSE 2                         -- OK last
+    END,
+    dir ASC
 `
 
 func (q *Queries) FindDriftAnalysisProjectsByRunId(ctx context.Context, driftAnalysisRunID uuid.UUID) ([]DriftAnalysisProject, error) {
