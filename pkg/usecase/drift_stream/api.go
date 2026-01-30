@@ -11,6 +11,8 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"github.com/google/uuid"
@@ -44,6 +46,15 @@ func NewDriftStateHandler(
 		repoRepository:          repoRepository,
 		driftAnalysisRepository: driftAnalysisRepo,
 		cleanupService:          cleanupService,
+	}
+}
+
+func providerToSlug(provider string) string {
+	switch provider {
+	case "GITHUB":
+		return "gh"
+	default:
+		return strings.ToLower(provider)
 	}
 }
 
@@ -168,7 +179,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 	// Build dashboard URL: /:provider/:org/:repo/run/:run_uuid
 	dashboardURL := fmt.Sprintf("%s/%s/%s/%s/run/%s",
 		d.cfg.Frontend.FrontendURL,
-		org.Provider,
+		providerToSlug(org.Provider),
 		org.Name,
 		repo.Name,
 		runUUID.String(),
