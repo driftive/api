@@ -1,11 +1,11 @@
 -- name: CreateDriftAnalysisRun :one
-INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, analysis_duration_millis)
-VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @total_projects_errored, @analysis_duration_millis)
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis)
+VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @total_projects_errored, @total_projects_skipped, @analysis_duration_millis)
 RETURNING *;
 
 -- name: CreateDriftAnalysisProject :one
-INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output)
-VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output)
+INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr)
+VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr)
 RETURNING *;
 
 -- name: FindDriftAnalysisRunsByRepositoryId :many
@@ -26,9 +26,10 @@ FROM drift_analysis_project
 WHERE drift_analysis_run_id = @drift_analysis_run_id
 ORDER BY
     CASE
-        WHEN succeeded = false THEN 0  -- Errored first
-        WHEN drifted = true THEN 1     -- Drifted second
-        ELSE 2                         -- OK last
+        WHEN succeeded = false THEN 0       -- Errored first
+        WHEN drifted = true THEN 1          -- Drifted second
+        WHEN skipped_due_to_pr = true THEN 2 -- Skipped third
+        ELSE 3                              -- OK last
     END,
     dir ASC;
 

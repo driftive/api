@@ -14,9 +14,9 @@ import (
 )
 
 const createDriftAnalysisProject = `-- name: CreateDriftAnalysisProject :one
-INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output
+INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+RETURNING id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr
 `
 
 type CreateDriftAnalysisProjectParams struct {
@@ -27,6 +27,7 @@ type CreateDriftAnalysisProjectParams struct {
 	Succeeded          bool
 	InitOutput         *string
 	PlanOutput         *string
+	SkippedDueToPr     bool
 }
 
 func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDriftAnalysisProjectParams) (DriftAnalysisProject, error) {
@@ -38,6 +39,7 @@ func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDrif
 		arg.Succeeded,
 		arg.InitOutput,
 		arg.PlanOutput,
+		arg.SkippedDueToPr,
 	)
 	var i DriftAnalysisProject
 	err := row.Scan(
@@ -49,14 +51,15 @@ func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDrif
 		&i.Succeeded,
 		&i.InitOutput,
 		&i.PlanOutput,
+		&i.SkippedDueToPr,
 	)
 	return i, err
 }
 
 const createDriftAnalysisRun = `-- name: CreateDriftAnalysisRun :one
-INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, analysis_duration_millis)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped
 `
 
 type CreateDriftAnalysisRunParams struct {
@@ -65,6 +68,7 @@ type CreateDriftAnalysisRunParams struct {
 	TotalProjects          int32
 	TotalProjectsDrifted   int32
 	TotalProjectsErrored   int32
+	TotalProjectsSkipped   int32
 	AnalysisDurationMillis int64
 }
 
@@ -75,6 +79,7 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 		arg.TotalProjects,
 		arg.TotalProjectsDrifted,
 		arg.TotalProjectsErrored,
+		arg.TotalProjectsSkipped,
 		arg.AnalysisDurationMillis,
 	)
 	var i DriftAnalysisRun
@@ -87,6 +92,7 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TotalProjectsErrored,
+		&i.TotalProjectsSkipped,
 	)
 	return i, err
 }
@@ -113,14 +119,15 @@ func (q *Queries) DeleteOldestRunsExceedingLimit(ctx context.Context, arg Delete
 }
 
 const findDriftAnalysisProjectsByRunId = `-- name: FindDriftAnalysisProjectsByRunId :many
-SELECT id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output
+SELECT id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr
 FROM drift_analysis_project
 WHERE drift_analysis_run_id = $1
 ORDER BY
     CASE
-        WHEN succeeded = false THEN 0  -- Errored first
-        WHEN drifted = true THEN 1     -- Drifted second
-        ELSE 2                         -- OK last
+        WHEN succeeded = false THEN 0       -- Errored first
+        WHEN drifted = true THEN 1          -- Drifted second
+        WHEN skipped_due_to_pr = true THEN 2 -- Skipped third
+        ELSE 3                              -- OK last
     END,
     dir ASC
 `
@@ -143,6 +150,7 @@ func (q *Queries) FindDriftAnalysisProjectsByRunId(ctx context.Context, driftAna
 			&i.Succeeded,
 			&i.InitOutput,
 			&i.PlanOutput,
+			&i.SkippedDueToPr,
 		); err != nil {
 			return nil, err
 		}
@@ -155,7 +163,7 @@ func (q *Queries) FindDriftAnalysisProjectsByRunId(ctx context.Context, driftAna
 }
 
 const findDriftAnalysisRunByUUID = `-- name: FindDriftAnalysisRunByUUID :one
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped
 FROM drift_analysis_run
 WHERE uuid = $1
 `
@@ -172,12 +180,13 @@ func (q *Queries) FindDriftAnalysisRunByUUID(ctx context.Context, argUuid uuid.U
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TotalProjectsErrored,
+		&i.TotalProjectsSkipped,
 	)
 	return i, err
 }
 
 const findDriftAnalysisRunsByRepositoryId = `-- name: FindDriftAnalysisRunsByRepositoryId :many
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped
 FROM drift_analysis_run
 WHERE repository_id = $1
 ORDER BY created_at DESC
@@ -208,6 +217,7 @@ func (q *Queries) FindDriftAnalysisRunsByRepositoryId(ctx context.Context, arg F
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.TotalProjectsErrored,
+			&i.TotalProjectsSkipped,
 		); err != nil {
 			return nil, err
 		}
@@ -300,7 +310,7 @@ func (q *Queries) GetDriftRateOverTime(ctx context.Context, arg GetDriftRateOver
 }
 
 const getLatestRunForRepository = `-- name: GetLatestRunForRepository :one
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped
 FROM drift_analysis_run
 WHERE repository_id = $1
 ORDER BY created_at DESC
@@ -319,6 +329,7 @@ func (q *Queries) GetLatestRunForRepository(ctx context.Context, repositoryID in
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.TotalProjectsErrored,
+		&i.TotalProjectsSkipped,
 	)
 	return i, err
 }

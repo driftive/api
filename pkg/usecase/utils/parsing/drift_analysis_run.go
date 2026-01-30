@@ -12,6 +12,7 @@ func ToDriftAnalysisRunDTO(run queries.DriftAnalysisRun) dto.DriftAnalysisRunDTO
 		TotalProjects:        run.TotalProjects,
 		TotalProjectsDrifted: run.TotalProjectsDrifted,
 		TotalProjectsErrored: run.TotalProjectsErrored,
+		TotalProjectsSkipped: run.TotalProjectsSkipped,
 		DurationMillis:       run.AnalysisDurationMillis,
 		CreatedAt:            run.CreatedAt,
 		UpdatedAt:            run.UpdatedAt,
@@ -28,14 +29,15 @@ func ToDriftAnalysisRunDTOs(runs []queries.DriftAnalysisRun) []dto.DriftAnalysis
 
 func ToDriftAnalysisProjectDTO(project queries.DriftAnalysisProject) dto.DriftAnalysisProjectDTO {
 	return dto.DriftAnalysisProjectDTO{
-		Id:         project.ID,
-		RunId:      project.DriftAnalysisRunID.String(),
-		Dir:        project.Dir,
-		Type:       project.Type,
-		Drifted:    project.Drifted,
-		Succeeded:  project.Succeeded,
-		InitOutput: project.InitOutput,
-		PlanOutput: project.PlanOutput,
+		Id:             project.ID,
+		RunId:          project.DriftAnalysisRunID.String(),
+		Dir:            project.Dir,
+		Type:           project.Type,
+		Drifted:        project.Drifted,
+		Succeeded:      project.Succeeded,
+		InitOutput:     project.InitOutput,
+		PlanOutput:     project.PlanOutput,
+		SkippedDueToPr: project.SkippedDueToPr,
 	}
 }
 

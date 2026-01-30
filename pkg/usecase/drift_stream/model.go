@@ -41,12 +41,15 @@ type DriftProjectResult struct {
 	Succeeded  bool   `json:"succeeded"`
 	InitOutput string `json:"init_output"`
 	PlanOutput string `json:"plan_output"`
+	// SkippedDueToPR is true if the drift was skipped because there are open PRs modifying the drifted files
+	SkippedDueToPR bool `json:"skipped_due_to_pr"`
 }
 
 type DriftDetectionResult struct {
 	ProjectResults []DriftProjectResult `json:"project_results"`
 	TotalDrifted   int32                `json:"total_drifted"`
 	TotalErrored   *int32               `json:"total_errored,omitempty"`
+	TotalSkipped   int32                `json:"total_skipped"`
 	TotalProjects  int32                `json:"total_projects"`
 	TotalChecked   int32                `json:"total_checked"`
 	Duration       time.Duration        `json:"duration"`

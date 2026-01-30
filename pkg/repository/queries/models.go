@@ -19,6 +19,7 @@ type DriftAnalysisProject struct {
 	Succeeded          bool
 	InitOutput         *string
 	PlanOutput         *string
+	SkippedDueToPr     bool
 }
 
 type DriftAnalysisRun struct {
@@ -30,6 +31,7 @@ type DriftAnalysisRun struct {
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
 	TotalProjectsErrored   int32
+	TotalProjectsSkipped   int32
 }
 
 type GitOrganization struct {

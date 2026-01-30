@@ -113,6 +113,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 			TotalProjects:          state.TotalProjects,
 			TotalProjectsDrifted:   state.TotalDrifted,
 			TotalProjectsErrored:   totalErrored,
+			TotalProjectsSkipped:   state.TotalSkipped,
 			AnalysisDurationMillis: state.Duration.Milliseconds(),
 		}
 
@@ -138,6 +139,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 				Succeeded:          project.Succeeded,
 				InitOutput:         &project.InitOutput,
 				PlanOutput:         &project.PlanOutput,
+				SkippedDueToPr:     project.SkippedDueToPR,
 			}
 			res, err := d.driftAnalysisRepository.CreateDriftAnalysisProject(ctx, projectParams)
 			if err != nil {
