@@ -61,6 +61,8 @@ github.com/jackc/puddle/v2 v2.2.2 h1:PR8nw+E/1w0GLuRFSmiioY6UooMp6KJv0/61nB7icHo
 github.com/jackc/puddle/v2 v2.2.2/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/jferrl/go-githubauth v1.5.0 h1:0zv6YqxGwtu2pjtb1DP2vaPVhdsIlyy4AhrjWryJTY8=
 github.com/jferrl/go-githubauth v1.5.0/go.mod h1:dwyfWjg9p59UvnSVevlPGGiVfVluPgezLlHBMLD5qs0=
+github.com/jferrl/go-githubauth v1.5.1 h1:otHMf7Q6+Hw98fEznIUewsrhayXQqXinhNLc7uqYbco=
+github.com/jferrl/go-githubauth v1.5.1/go.mod h1:/TwNj2nXg/u0wrTnz8+BjJDThDKaScqsczu7Ryj+v2s=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
 github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
 github.com/klauspost/compress v1.17.9 h1:6KIumPrER1LHsvBVuDa0r5xaG0Es51mhhB9BQB2qeMA=
