@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -85,9 +86,14 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if len(jwtSecret) < 32 {
+		return nil, fmt.Errorf("JWT_SECRET must be set and at least 32 characters long")
+	}
+
 	auth := AuthConfig{
 		LoginRedirectUrl:       utils.GetEnvOrDefault("LOGIN_REDIRECT_URL", "http://localhost:3001/login/success"),
-		JwtSecret:              utils.GetEnvOrDefault("JWT_SECRET", ""),
+		JwtSecret:              jwtSecret,
 		AllowedRedirectOrigins: allowedRedirectOrigins,
 	}
 
