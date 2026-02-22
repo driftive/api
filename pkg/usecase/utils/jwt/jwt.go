@@ -1,19 +1,20 @@
 package jwt
 
 import (
-	"driftive.cloud/api/pkg/model/auth"
 	"errors"
-	"github.com/golang-jwt/jwt/v5"
 	"time"
+
+	"driftive.cloud/api/pkg/model/auth"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 const (
-	ErrJwtSecretEmptyMessage = "jwt.secret.empty"
+	ErrJwtSecretInvalidMessage = "JWT secret must be set and at least 32 characters long"
 )
 
 func GenerateJWTToken(userToken auth.UserToken, jwtSecret string) (string, error) {
-	if jwtSecret == "" {
-		return "", errors.New(ErrJwtSecretEmptyMessage)
+	if len(jwtSecret) < 32 {
+		return "", errors.New(ErrJwtSecretInvalidMessage)
 	}
 
 	claims := jwt.MapClaims{
