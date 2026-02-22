@@ -10,7 +10,7 @@ require (
 	github.com/google/go-github/v81 v81.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.8.0
-	github.com/jferrl/go-githubauth v1.5.0
+	github.com/jferrl/go-githubauth v1.5.1
 	github.com/joho/godotenv v1.5.1
 	go.opentelemetry.io/otel v1.39.0
 	go.opentelemetry.io/otel/metric v1.39.0
