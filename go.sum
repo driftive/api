@@ -75,6 +75,7 @@ github.com/jferrl/go-githubauth v1.5.1 h1:otHMf7Q6+Hw98fEznIUewsrhayXQqXinhNLc7u
 github.com/jferrl/go-githubauth v1.5.1/go.mod h1:/TwNj2nXg/u0wrTnz8+BjJDThDKaScqsczu7Ryj+v2s=
 github.com/jferrl/go-githubauth v1.6.0 h1:By+4kqdNPhvizKztD1uVbwk3cp2o9bNIVATZ9oIDYaw=
 github.com/jferrl/go-githubauth v1.6.0/go.mod h1:JfSoHpcaY93/UduD45AY15pLgkcE1LnsZfH+Gqf/TBI=
+github.com/jferrl/go-githubauth/v2 v2.0.1/go.mod h1:2yioYoBdTgZBwJiAFGXMirzyFEw+WJW/CR9ykaGdmUw=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
 github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
 github.com/klauspost/compress v1.17.9 h1:6KIumPrER1LHsvBVuDa0r5xaG0Es51mhhB9BQB2qeMA=
