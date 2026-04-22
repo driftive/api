@@ -9,7 +9,7 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"errors"
 	"github.com/gofiber/fiber/v2/log"
-	"github.com/google/go-github/v81/github"
+	"github.com/google/go-github/v85/github"
 	"time"
 )
 
