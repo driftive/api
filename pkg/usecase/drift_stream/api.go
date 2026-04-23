@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"time"
@@ -71,7 +71,7 @@ func projectTypeToDBString(projectType ProjectType) (string, error) {
 	}
 }
 
-func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
+func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 	log.Info("Handling drift state update")
 	headers := c.GetReqHeaders()
 	tokenArr := headers["X-Token"]
@@ -98,7 +98,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 	}
 
 	var state DriftDetectionResult
-	if err := c.BodyParser(&state); err != nil {
+	if err := c.Bind().Body(&state); err != nil {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
@@ -193,7 +193,7 @@ func (d *DriftStateHandler) HandleUpdate(c *fiber.Ctx) error {
 	return c.JSON(response)
 }
 
-func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
+func (d *DriftStateHandler) ListRunsByRepoId(c fiber.Ctx) error {
 	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
@@ -213,7 +213,7 @@ func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	page := c.QueryInt("page")
+	page := fiber.Query[int](c, "page")
 	if page < 0 {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
@@ -229,7 +229,7 @@ func (d *DriftStateHandler) ListRunsByRepoId(c *fiber.Ctx) error {
 	return c.JSON(runsDTO)
 }
 
-func (d *DriftStateHandler) GetRunById(c *fiber.Ctx) error {
+func (d *DriftStateHandler) GetRunById(c fiber.Ctx) error {
 	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
@@ -270,7 +270,7 @@ func (d *DriftStateHandler) GetRunById(c *fiber.Ctx) error {
 	return c.JSON(runDTO)
 }
 
-func (d *DriftStateHandler) GetRepositoryStats(c *fiber.Ctx) error {
+func (d *DriftStateHandler) GetRepositoryStats(c fiber.Ctx) error {
 	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
@@ -324,7 +324,7 @@ func (d *DriftStateHandler) GetRepositoryStats(c *fiber.Ctx) error {
 	return c.JSON(result)
 }
 
-func (d *DriftStateHandler) GetRepositoryTrends(c *fiber.Ctx) error {
+func (d *DriftStateHandler) GetRepositoryTrends(c fiber.Ctx) error {
 	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
@@ -346,7 +346,7 @@ func (d *DriftStateHandler) GetRepositoryTrends(c *fiber.Ctx) error {
 	}
 
 	// Parse days_back query param (default 30, max 90)
-	daysBack := int32(c.QueryInt("days_back", 30))
+	daysBack := int32(fiber.Query[int](c, "days_back", 30))
 	if daysBack < 1 {
 		daysBack = 30
 	}
