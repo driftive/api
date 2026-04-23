@@ -1,6 +1,7 @@
 package auth
 
 import (
+	jwtware "github.com/gofiber/contrib/v3/jwt"
 	"github.com/gofiber/fiber/v3"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -12,13 +13,8 @@ const (
 )
 
 func MustGetLoggedUserId(c fiber.Ctx) (*int64, error) {
-	userLocal := c.Locals("user")
-	if userLocal == nil {
-		return nil, fiber.NewError(fiber.StatusUnauthorized, ErrUserNotFoundMsg)
-	}
-
-	user, ok := userLocal.(*jwt.Token)
-	if !ok || user == nil {
+	user := jwtware.FromContext(c)
+	if user == nil {
 		return nil, fiber.NewError(fiber.StatusUnauthorized, ErrUserNotFoundMsg)
 	}
 
