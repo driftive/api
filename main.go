@@ -25,18 +25,18 @@ import (
 	github2 "driftive.cloud/api/pkg/usecase/sync/user_resources/github"
 	"driftive.cloud/api/pkg/utils"
 
-	jwtware "github.com/gofiber/contrib/jwt"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/log"
-	"github.com/gofiber/fiber/v2/middleware/compress"
-	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/healthcheck"
-	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
+	jwtware "github.com/gofiber/contrib/v3/jwt"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/log"
+	"github.com/gofiber/fiber/v3/middleware/compress"
+	"github.com/gofiber/fiber/v3/middleware/cors"
+	"github.com/gofiber/fiber/v3/middleware/healthcheck"
+	"github.com/gofiber/fiber/v3/middleware/logger"
+	"github.com/gofiber/fiber/v3/middleware/requestid"
 	"github.com/joho/godotenv"
 )
 
-func jwtError(c *fiber.Ctx, err error) error {
+func jwtError(c fiber.Ctx, err error) error {
 	if err.Error() == "Missing or malformed JWT" {
 		return c.Status(fiber.StatusBadRequest).
 			JSON(fiber.Map{"status": "error", "message": "Missing or malformed JWT", "data": nil})
@@ -87,9 +87,10 @@ func main() {
 		Format:     "${time} | ${locals:requestid} | ${status} | ${latency} | ${ip} | ${method} | ${path} | ${error}\n",
 	}))
 	app.Use(cors.New(cors.Config{
-		AllowOrigins: "*",
+		AllowOrigins: []string{"*"},
 	}))
-	app.Use(healthcheck.New())
+	app.Get(healthcheck.LivenessEndpoint, healthcheck.New())
+	app.Get(healthcheck.ReadinessEndpoint, healthcheck.New())
 	app.Use(compress.New())
 
 	api := app.Group("/api")
@@ -125,17 +126,17 @@ func main() {
 	profileHandler := auth.NewProfileHandler(userRepo)
 
 	// Public routes
-	app.Get("/", func(c *fiber.Ctx) error {
+	app.Get("/", func(c fiber.Ctx) error {
 		return c.SendString("Hello, World!")
 	})
-	v1.Get("/auth/github", func(c *fiber.Ctx) error {
+	v1.Get("/auth/github", func(c fiber.Ctx) error {
 		return ghOAuthHandler.Authenticate(c)
 	})
-	v1.Get("/auth/github/callback", func(c *fiber.Ctx) error {
+	v1.Get("/auth/github/callback", func(c fiber.Ctx) error {
 		return ghOAuthHandler.Callback(c)
 	})
-	v1.Post("/drift_analysis", func(c *fiber.Ctx) error { return driftStateHandler.HandleUpdate(c) })
-	v1.Get("/orgs/gh_installed", func(c *fiber.Ctx) error { return organizationHandler.HandleGHOrganizationInstalled(c) })
+	v1.Post("/drift_analysis", func(c fiber.Ctx) error { return driftStateHandler.HandleUpdate(c) })
+	v1.Get("/orgs/gh_installed", func(c fiber.Ctx) error { return organizationHandler.HandleGHOrganizationInstalled(c) })
 
 	app.Use(jwtware.New(jwtware.Config{
 		SigningKey:   jwtware.SigningKey{Key: []byte(cfg.Auth.JwtSecret)},
@@ -144,20 +145,20 @@ func main() {
 	app.Use(perms.New(orgRepo))
 
 	// Authenticated routes
-	v1.Get("/auth/me", func(c *fiber.Ctx) error { return profileHandler.GetLoggedUser(c) })
-	v1.Get("/org/:org_id/repos", func(c *fiber.Ctx) error { return repositoryHandler.ListOrganizationRepos(c) })
-	v1.Get("/org/:org_id/repo", func(c *fiber.Ctx) error { return repositoryHandler.GetRepoByOrgIdAndName(c) })
-	v1.Get("/repo/:repo_id/token", func(c *fiber.Ctx) error { return repositoryHandler.GetRepoTokenById(c) })
-	v1.Post("/repo/:repo_id/token", func(c *fiber.Ctx) error { return repositoryHandler.RegenerateToken(c) })
-	v1.Get("/repo/:repo_id/runs", func(c *fiber.Ctx) error { return driftStateHandler.ListRunsByRepoId(c) })
-	v1.Get("/repo/:repo_id/stats", func(c *fiber.Ctx) error { return driftStateHandler.GetRepositoryStats(c) })
-	v1.Get("/repo/:repo_id/trends", func(c *fiber.Ctx) error { return driftStateHandler.GetRepositoryTrends(c) })
-	v1.Get("/analysis/run/:run_id", func(c *fiber.Ctx) error { return driftStateHandler.GetRunById(c) })
-	v1.Post("/sync_user", func(c *fiber.Ctx) error { return userSync.HandleUserSyncRequest(c) })
+	v1.Get("/auth/me", func(c fiber.Ctx) error { return profileHandler.GetLoggedUser(c) })
+	v1.Get("/org/:org_id/repos", func(c fiber.Ctx) error { return repositoryHandler.ListOrganizationRepos(c) })
+	v1.Get("/org/:org_id/repo", func(c fiber.Ctx) error { return repositoryHandler.GetRepoByOrgIdAndName(c) })
+	v1.Get("/repo/:repo_id/token", func(c fiber.Ctx) error { return repositoryHandler.GetRepoTokenById(c) })
+	v1.Post("/repo/:repo_id/token", func(c fiber.Ctx) error { return repositoryHandler.RegenerateToken(c) })
+	v1.Get("/repo/:repo_id/runs", func(c fiber.Ctx) error { return driftStateHandler.ListRunsByRepoId(c) })
+	v1.Get("/repo/:repo_id/stats", func(c fiber.Ctx) error { return driftStateHandler.GetRepositoryStats(c) })
+	v1.Get("/repo/:repo_id/trends", func(c fiber.Ctx) error { return driftStateHandler.GetRepositoryTrends(c) })
+	v1.Get("/analysis/run/:run_id", func(c fiber.Ctx) error { return driftStateHandler.GetRunById(c) })
+	v1.Post("/sync_user", func(c fiber.Ctx) error { return userSync.HandleUserSyncRequest(c) })
 
 	ghG := v1.Group("/gh")
-	ghG.Get("/orgs", func(c *fiber.Ctx) error { return organizationHandler.ListGitOrganizations(c) })
-	ghG.Get("/org", func(c *fiber.Ctx) error { return organizationHandler.GetOrgByNameAndProvider(c, model.GitHubProvider) })
+	ghG.Get("/orgs", func(c fiber.Ctx) error { return organizationHandler.ListGitOrganizations(c) })
+	ghG.Get("/org", func(c fiber.Ctx) error { return organizationHandler.GetOrgByNameAndProvider(c, model.GitHubProvider) })
 
 	// Setup graceful shutdown
 	ctx, cancel := context.WithCancel(context.Background())

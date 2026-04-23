@@ -4,8 +4,8 @@ import (
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/log"
 )
 
 type ProfileHandler struct {
@@ -16,7 +16,7 @@ func NewProfileHandler(userRepo repository.UserRepository) ProfileHandler {
 	return ProfileHandler{userRepo: userRepo}
 }
 
-func (h *ProfileHandler) GetLoggedUser(c *fiber.Ctx) error {
+func (h *ProfileHandler) GetLoggedUser(c fiber.Ctx) error {
 	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)

@@ -5,7 +5,7 @@ import (
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
 )
 
@@ -27,7 +27,7 @@ func NewGitRepositoryHandler(
 	}
 }
 
-func (h *GitRepositoryHandler) ListOrganizationRepos(c *fiber.Ctx) error {
+func (h *GitRepositoryHandler) ListOrganizationRepos(c fiber.Ctx) error {
 	orgIdStr := c.Params("org_id")
 	if orgIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -47,7 +47,7 @@ func (h *GitRepositoryHandler) ListOrganizationRepos(c *fiber.Ctx) error {
 	return c.JSON(repoDTOs)
 }
 
-func (h *GitRepositoryHandler) GetRepoByOrgIdAndName(c *fiber.Ctx) error {
+func (h *GitRepositoryHandler) GetRepoByOrgIdAndName(c fiber.Ctx) error {
 	orgIdStr := c.Params("org_id")
 	if orgIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -72,7 +72,7 @@ func (h *GitRepositoryHandler) GetRepoByOrgIdAndName(c *fiber.Ctx) error {
 	return c.JSON(repoDTO)
 }
 
-func (h *GitRepositoryHandler) GetRepoTokenById(c *fiber.Ctx) error {
+func (h *GitRepositoryHandler) GetRepoTokenById(c fiber.Ctx) error {
 	repoIdStr := c.Params("repo_id")
 	if repoIdStr == "" {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -96,7 +96,7 @@ func (h *GitRepositoryHandler) GetRepoTokenById(c *fiber.Ctx) error {
 	return c.JSON(tokenResponse)
 }
 
-func (h *GitRepositoryHandler) RegenerateToken(c *fiber.Ctx) error {
+func (h *GitRepositoryHandler) RegenerateToken(c fiber.Ctx) error {
 	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)

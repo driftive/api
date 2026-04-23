@@ -10,8 +10,8 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"driftive.cloud/api/pkg/usecase/utils/strutils"
 	"errors"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/log"
 	"github.com/google/go-github/v85/github"
 	"time"
 )
@@ -155,7 +155,7 @@ func (s *UserResourceSyncer) StartSyncLoop() {
 	}
 }
 
-func (s *UserResourceSyncer) HandleUserSyncRequest(c *fiber.Ctx) error {
+func (s *UserResourceSyncer) HandleUserSyncRequest(c fiber.Ctx) error {
 	userId, err := auth.MustGetLoggedUserId(c)
 	if err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)

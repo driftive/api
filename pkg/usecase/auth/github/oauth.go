@@ -23,8 +23,8 @@ import (
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/gh"
 	"driftive.cloud/api/pkg/usecase/utils/jwt"
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/log"
 	gojwt "github.com/golang-jwt/jwt/v5"
 )
 
@@ -145,7 +145,7 @@ func (o *OAuthHandler) validateStateJWT(tokenString string) (*OAuthStateClaims, 
 	return claims, nil
 }
 
-func (o *OAuthHandler) Authenticate(c *fiber.Ctx) error {
+func (o *OAuthHandler) Authenticate(c fiber.Ctx) error {
 	// Optional redirect URL from query parameter
 	redirectURL := c.Query("redirect_url", "")
 
@@ -166,10 +166,10 @@ func (o *OAuthHandler) Authenticate(c *fiber.Ctx) error {
 	authUrl := fmt.Sprintf("%s/login/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s",
 		o.cfg.GithubAppConfig.GithubURL, o.cfg.GithubAppConfig.ClientID, o.cfg.GithubAppConfig.CallbackURL, state)
 
-	return c.Redirect(authUrl, fiber.StatusFound)
+	return c.Redirect().Status(fiber.StatusFound).To(authUrl)
 }
 
-func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
+func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 	ctx := c.Context()
 
 	// Validate OAuth state JWT
@@ -269,9 +269,8 @@ func (o *OAuthHandler) Callback(c *fiber.Ctx) error {
 			}
 		}
 
-		return c.Redirect(
+		return c.Redirect().Status(fiber.StatusFound).To(
 			fmt.Sprintf("%s?token=%s", redirectURL, jwtToken),
-			fiber.StatusFound,
 		)
 	})
 

@@ -12,7 +12,7 @@ import (
 	"driftive.cloud/api/pkg/observability"
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
-	"github.com/gofiber/fiber/v2/log"
+	"github.com/gofiber/fiber/v3/log"
 	"github.com/jackc/pgx/v5"
 	"resty.dev/v3"
 )
