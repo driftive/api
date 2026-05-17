@@ -46,7 +46,7 @@ func TestMustGetLoggedUserId_ValidToken(t *testing.T) {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.Test(req)
@@ -69,7 +69,7 @@ func TestMustGetLoggedUserId_ValidToken(t *testing.T) {
 func TestMustGetLoggedUserId_NoToken(t *testing.T) {
 	app := newTestApp()
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -85,7 +85,7 @@ func TestMustGetLoggedUserId_NoToken(t *testing.T) {
 func TestMustGetLoggedUserId_InvalidToken(t *testing.T) {
 	app := newTestApp()
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 	req.Header.Set("Authorization", "Bearer invalid.token.here")
 
 	resp, err := app.Test(req)
@@ -111,7 +111,7 @@ func TestMustGetLoggedUserId_WrongSecret(t *testing.T) {
 		t.Fatalf("failed to generate token: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.Test(req)
