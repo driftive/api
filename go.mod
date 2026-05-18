@@ -8,6 +8,7 @@ require (
 	github.com/gofiber/fiber/v3 v3.2.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-github/v85 v85.0.0
+	github.com/google/go-github/v87 v87.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jferrl/go-githubauth v1.6.0
