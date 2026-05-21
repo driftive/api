@@ -13,6 +13,7 @@ type DriftAnalysisRepository interface {
 	CreateDriftAnalysisProject(ctx context.Context, params queries.CreateDriftAnalysisProjectParams) (queries.DriftAnalysisProject, error)
 	FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error)
 	FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error)
+	FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (queries.DriftAnalysisRun, error)
 	FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error)
 	GetRepositoryRunStats(ctx context.Context, repoId int64) (queries.GetRepositoryRunStatsRow, error)
 	GetLatestRunForRepository(ctx context.Context, repoId int64) (queries.DriftAnalysisRun, error)
@@ -52,6 +53,15 @@ func (r *DriftAnalysisRepo) FindDriftAnalysisRunsByRepositoryID(ctx context.Cont
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error) {
 	return r.db.Queries(ctx).FindDriftAnalysisRunByUUID(ctx, uuid)
+}
+
+// FindRunByRepoAndIdempotencyKey returns pgx.ErrNoRows when no matching run exists; callers
+// should check with errors.Is(err, pgx.ErrNoRows).
+func (r *DriftAnalysisRepo) FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (queries.DriftAnalysisRun, error) {
+	return r.db.Queries(ctx).FindDriftAnalysisRunByRepoAndIdempotencyKey(ctx, queries.FindDriftAnalysisRunByRepoAndIdempotencyKeyParams{
+		RepositoryID:   repoId,
+		IdempotencyKey: &idempotencyKey,
+	})
 }
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error) {

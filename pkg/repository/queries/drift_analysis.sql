@@ -1,7 +1,12 @@
 -- name: CreateDriftAnalysisRun :one
-INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis)
-VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @total_projects_errored, @total_projects_skipped, @analysis_duration_millis)
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key)
+VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @total_projects_errored, @total_projects_skipped, @analysis_duration_millis, @idempotency_key)
 RETURNING *;
+
+-- name: FindDriftAnalysisRunByRepoAndIdempotencyKey :one
+SELECT *
+FROM drift_analysis_run
+WHERE repository_id = @repository_id AND idempotency_key = @idempotency_key;
 
 -- name: CreateDriftAnalysisProject :one
 INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr)

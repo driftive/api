@@ -17,8 +17,12 @@ import (
 	"github.com/gofiber/fiber/v3/log"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"time"
 )
+
+// pgUniqueViolation is the SQLSTATE code for unique_violation.
+const pgUniqueViolation = "23505"
 
 type DriftStateHandler struct {
 	cfg                     *config.Config
@@ -97,6 +101,22 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
+	idemKey := strings.TrimSpace(c.Get("Idempotency-Key"))
+
+	// If the client sent an Idempotency-Key and we already have a run for it, return that run
+	// without re-inserting. This lets the CLI safely retry transient failures.
+	if idemKey != "" {
+		existing, err := d.driftAnalysisRepository.FindRunByRepoAndIdempotencyKey(c.Context(), repo.ID, idemKey)
+		if err == nil {
+			log.Infof("Idempotent replay for repository %d, key %s -> run %s", repo.ID, idemKey, existing.Uuid)
+			return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, existing.Uuid))
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			log.Errorf("Error looking up run by idempotency key: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+	}
+
 	var state DriftDetectionResult
 	if err := c.Bind().Body(&state); err != nil {
 		return c.SendStatus(fiber.StatusBadRequest)
@@ -116,6 +136,11 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 		}
 	}
 
+	var idemKeyPtr *string
+	if idemKey != "" {
+		idemKeyPtr = &idemKey
+	}
+
 	var runUUID uuid.UUID
 	err = d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
 		params := queries.CreateDriftAnalysisRunParams{
@@ -126,6 +151,7 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 			TotalProjectsErrored:   totalErrored,
 			TotalProjectsSkipped:   state.TotalSkipped,
 			AnalysisDurationMillis: state.Duration.Milliseconds(),
+			IdempotencyKey:         idemKeyPtr,
 		}
 
 		run, err := d.driftAnalysisRepository.CreateDriftAnalysisRun(ctx, params)
@@ -165,6 +191,19 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 	})
 
 	if err != nil {
+		// Race: a concurrent retry with the same idempotency key may have inserted first.
+		// The partial unique index on (repository_id, idempotency_key) trips with SQLSTATE 23505;
+		// re-fetch and return the winning row.
+		if idemKey != "" {
+			var pgErr *pgconn.PgError
+			if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
+				existing, lookupErr := d.driftAnalysisRepository.FindRunByRepoAndIdempotencyKey(c.Context(), repo.ID, idemKey)
+				if lookupErr == nil {
+					log.Infof("Idempotent race resolved for repository %d, key %s -> run %s", repo.ID, idemKey, existing.Uuid)
+					return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, existing.Uuid))
+				}
+			}
+		}
 		log.Errorf("Error handling drift state update: %v", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
@@ -176,21 +215,21 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 		}
 	}
 
-	// Build dashboard URL: /:provider/:org/:repo/run/:run_uuid
+	return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, runUUID))
+}
+
+func buildAnalysisResponse(frontendURL string, org queries.GitOrganization, repo queries.GitRepository, runUUID uuid.UUID) DriftAnalysisResponse {
 	dashboardURL := fmt.Sprintf("%s/%s/%s/%s/run/%s",
-		d.cfg.Frontend.FrontendURL,
+		frontendURL,
 		providerToSlug(org.Provider),
 		org.Name,
 		repo.Name,
 		runUUID.String(),
 	)
-
-	response := DriftAnalysisResponse{
+	return DriftAnalysisResponse{
 		RunID:        runUUID.String(),
 		DashboardURL: dashboardURL,
 	}
-
-	return c.JSON(response)
 }
 
 func (d *DriftStateHandler) ListRunsByRepoId(c fiber.Ctx) error {
