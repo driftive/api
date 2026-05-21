@@ -107,13 +107,13 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 	// without re-inserting. This lets the CLI safely retry transient failures.
 	if idemKey != "" {
 		existing, err := d.driftAnalysisRepository.FindRunByRepoAndIdempotencyKey(c.Context(), repo.ID, idemKey)
-		if err != nil {
-			log.Errorf("Error looking up run by idempotency key: %v", err)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-		if existing != nil {
+		if err == nil {
 			log.Infof("Idempotent replay for repository %d, key %s -> run %s", repo.ID, idemKey, existing.Uuid)
 			return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, existing.Uuid))
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			log.Errorf("Error looking up run by idempotency key: %v", err)
+			return c.SendStatus(fiber.StatusInternalServerError)
 		}
 	}
 
@@ -198,7 +198,7 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
 				existing, lookupErr := d.driftAnalysisRepository.FindRunByRepoAndIdempotencyKey(c.Context(), repo.ID, idemKey)
-				if lookupErr == nil && existing != nil {
+				if lookupErr == nil {
 					log.Infof("Idempotent race resolved for repository %d, key %s -> run %s", repo.ID, idemKey, existing.Uuid)
 					return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, existing.Uuid))
 				}

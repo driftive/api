@@ -2,12 +2,10 @@ package repository
 
 import (
 	"context"
-	"errors"
 
 	"driftive.cloud/api/pkg/db"
 	"driftive.cloud/api/pkg/repository/queries"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 type DriftAnalysisRepository interface {
@@ -15,7 +13,7 @@ type DriftAnalysisRepository interface {
 	CreateDriftAnalysisProject(ctx context.Context, params queries.CreateDriftAnalysisProjectParams) (queries.DriftAnalysisProject, error)
 	FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error)
 	FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error)
-	FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (*queries.DriftAnalysisRun, error)
+	FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (queries.DriftAnalysisRun, error)
 	FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error)
 	GetRepositoryRunStats(ctx context.Context, repoId int64) (queries.GetRepositoryRunStatsRow, error)
 	GetLatestRunForRepository(ctx context.Context, repoId int64) (queries.DriftAnalysisRun, error)
@@ -57,18 +55,13 @@ func (r *DriftAnalysisRepo) FindDriftAnalysisRunByUUID(ctx context.Context, uuid
 	return r.db.Queries(ctx).FindDriftAnalysisRunByUUID(ctx, uuid)
 }
 
-func (r *DriftAnalysisRepo) FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (*queries.DriftAnalysisRun, error) {
-	run, err := r.db.Queries(ctx).FindDriftAnalysisRunByRepoAndIdempotencyKey(ctx, queries.FindDriftAnalysisRunByRepoAndIdempotencyKeyParams{
+// FindRunByRepoAndIdempotencyKey returns pgx.ErrNoRows when no matching run exists; callers
+// should check with errors.Is(err, pgx.ErrNoRows).
+func (r *DriftAnalysisRepo) FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (queries.DriftAnalysisRun, error) {
+	return r.db.Queries(ctx).FindDriftAnalysisRunByRepoAndIdempotencyKey(ctx, queries.FindDriftAnalysisRunByRepoAndIdempotencyKeyParams{
 		RepositoryID:   repoId,
 		IdempotencyKey: &idempotencyKey,
 	})
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return &run, nil
 }
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error) {
