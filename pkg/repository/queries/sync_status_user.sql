@@ -1,8 +1,10 @@
 -- name: FindOnePendingSyncStatusUser :one
-SELECT *
+SELECT sync_status_user.*
 FROM sync_status_user
-WHERE next_sync < NOW() FOR
-    UPDATE SKIP LOCKED
+         INNER JOIN users ON users.id = sync_status_user.user_id
+WHERE sync_status_user.next_sync < NOW()
+  AND users.token_refresh_disabled_at IS NULL
+FOR UPDATE OF sync_status_user SKIP LOCKED
 LIMIT 1;
 
 

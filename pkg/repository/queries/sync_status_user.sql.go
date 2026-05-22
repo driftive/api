@@ -30,10 +30,12 @@ func (q *Queries) CreateOrUpdateSyncStatusUser(ctx context.Context, userID int64
 }
 
 const findOnePendingSyncStatusUser = `-- name: FindOnePendingSyncStatusUser :one
-SELECT id, user_id, synced_at, next_sync, attempts
+SELECT sync_status_user.id, sync_status_user.user_id, sync_status_user.synced_at, sync_status_user.next_sync, sync_status_user.attempts
 FROM sync_status_user
-WHERE next_sync < NOW() FOR
-    UPDATE SKIP LOCKED
+         INNER JOIN users ON users.id = sync_status_user.user_id
+WHERE sync_status_user.next_sync < NOW()
+  AND users.token_refresh_disabled_at IS NULL
+FOR UPDATE OF sync_status_user SKIP LOCKED
 LIMIT 1
 `
 
