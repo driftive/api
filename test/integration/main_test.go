@@ -22,8 +22,8 @@ import (
 	"driftive.cloud/api/pkg/db"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/ory/dockertest/v3"
-	"github.com/ory/dockertest/v3/docker"
+	"github.com/moby/moby/api/types/container"
+	"github.com/ory/dockertest/v4"
 )
 
 // testDB is the *db.DB shared by every test. Populated by TestMain.
@@ -53,34 +53,28 @@ func TestMain(m *testing.M) {
 		log.Fatal("integration tests: could not locate migrations directory")
 	}
 
-	pool, err := dockertest.NewPool("")
+	ctx := context.Background()
+	pool, err := dockertest.NewPool(ctx, "", dockertest.WithMaxWait(60*time.Second))
 	if err != nil {
 		log.Printf("integration tests: docker unreachable, skipping: %v", err)
 		os.Exit(0)
 	}
-	if err := pool.Client.Ping(); err != nil {
-		log.Printf("integration tests: docker daemon not responding, skipping: %v", err)
-		os.Exit(0)
-	}
 
-	resource, err := pool.RunWithOptions(&dockertest.RunOptions{
-		Repository: "postgres",
-		Tag:        "16-alpine",
-		Env: []string{
+	resource, err := pool.Run(ctx, "postgres",
+		dockertest.WithTag("16-alpine"),
+		dockertest.WithEnv([]string{
 			"POSTGRES_USER=" + pgUser,
 			"POSTGRES_PASSWORD=" + pgPassword,
 			"POSTGRES_DB=" + pgDatabase,
 			"listen_addresses=*",
-		},
-	}, func(hc *docker.HostConfig) {
-		hc.AutoRemove = true
-		hc.RestartPolicy = docker.RestartPolicy{Name: "no"}
-	})
+		}),
+		dockertest.WithHostConfig(func(hc *container.HostConfig) {
+			hc.AutoRemove = true
+			hc.RestartPolicy = container.RestartPolicy{Name: container.RestartPolicyDisabled}
+		}),
+	)
 	if err != nil {
 		log.Fatalf("integration tests: failed to start postgres: %v", err)
-	}
-	if err := resource.Expire(120); err != nil {
-		log.Printf("integration tests: could not set container expiry: %v", err)
 	}
 
 	hostPort := resource.GetHostPort("5432/tcp")
@@ -90,16 +84,15 @@ func TestMain(m *testing.M) {
 	}
 	port, _ := strconv.Atoi(portStr)
 
-	pool.MaxWait = 60 * time.Second
 	connStr := fmt.Sprintf("postgres://%s:%s@%s/%s?sslmode=disable",
 		pgUser, pgPassword, net.JoinHostPort(host, portStr), pgDatabase)
-	if err := pool.Retry(func() error {
-		conn, err := pgx.Connect(context.Background(), connStr)
+	if err := pool.Retry(ctx, 60*time.Second, func() error {
+		conn, err := pgx.Connect(ctx, connStr)
 		if err != nil {
 			return err
 		}
-		defer conn.Close(context.Background())
-		return conn.Ping(context.Background())
+		defer conn.Close(ctx)
+		return conn.Ping(ctx)
 	}); err != nil {
 		log.Fatalf("integration tests: postgres never became reachable: %v", err)
 	}
@@ -123,8 +116,8 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	testDB.Pool.Close()
-	if err := pool.Purge(resource); err != nil {
-		log.Printf("integration tests: failed to purge postgres container: %v", err)
+	if err := pool.Close(ctx); err != nil {
+		log.Printf("integration tests: failed to close docker pool: %v", err)
 	}
 	os.Exit(code)
 }
