@@ -56,6 +56,17 @@ func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDrif
 	return i, err
 }
 
+type CreateDriftAnalysisProjectsBatchParams struct {
+	DriftAnalysisRunID uuid.UUID
+	Dir                string
+	Type               string
+	Drifted            bool
+	Succeeded          bool
+	InitOutput         *string
+	PlanOutput         *string
+	SkippedDueToPr     bool
+}
+
 const createDriftAnalysisRun = `-- name: CreateDriftAnalysisRun :one
 INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

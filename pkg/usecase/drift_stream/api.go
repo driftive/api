@@ -141,6 +141,18 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 		idemKeyPtr = &idemKey
 	}
 
+	// Pre-validate all project types before opening a transaction.
+	// (returning c.SendStatus from inside the closure would commit the partial tx).
+	projectTypes := make([]string, len(state.ProjectResults))
+	for i, project := range state.ProjectResults {
+		projectType, err := projectTypeToDBString(project.Project.Type)
+		if err != nil {
+			log.Errorf("Invalid project type %v at index %d: %v", project.Project.Type, i, err)
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+		projectTypes[i] = projectType
+	}
+
 	var runUUID uuid.UUID
 	err = d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
 		params := queries.CreateDriftAnalysisRunParams{
@@ -161,29 +173,26 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 		}
 		runUUID = run.Uuid
 
-		for _, project := range state.ProjectResults {
-			projectType, err := projectTypeToDBString(project.Project.Type)
-			if err != nil {
-				log.Errorf("Error converting project type to db string: %v", err)
-				return c.SendStatus(fiber.StatusBadRequest)
+		if len(state.ProjectResults) > 0 {
+			batch := make([]queries.CreateDriftAnalysisProjectsBatchParams, len(state.ProjectResults))
+			for i, project := range state.ProjectResults {
+				batch[i] = queries.CreateDriftAnalysisProjectsBatchParams{
+					DriftAnalysisRunID: run.Uuid,
+					Dir:                project.Project.Dir,
+					Type:               projectTypes[i],
+					Drifted:            project.Drifted,
+					Succeeded:          project.Succeeded,
+					InitOutput:         &project.InitOutput,
+					PlanOutput:         &project.PlanOutput,
+					SkippedDueToPr:     project.SkippedDueToPR,
+				}
 			}
-
-			projectParams := queries.CreateDriftAnalysisProjectParams{
-				DriftAnalysisRunID: run.Uuid,
-				Dir:                project.Project.Dir,
-				Type:               projectType,
-				Drifted:            project.Drifted,
-				Succeeded:          project.Succeeded,
-				InitOutput:         &project.InitOutput,
-				PlanOutput:         &project.PlanOutput,
-				SkippedDueToPr:     project.SkippedDueToPR,
-			}
-			res, err := d.driftAnalysisRepository.CreateDriftAnalysisProject(ctx, projectParams)
+			inserted, err := d.driftAnalysisRepository.CreateDriftAnalysisProjectsBatch(ctx, batch)
 			if err != nil {
-				log.Errorf("Error creating drift analysis project: %v", err)
+				log.Errorf("Error batch-inserting drift analysis projects: %v", err)
 				return err
 			}
-			log.Debugf("Created drift analysis project: [ID: %d, dir: %s]", res.ID, project.Project.Dir)
+			log.Debugf("Batch-inserted %d drift analysis projects for run %s", inserted, run.Uuid)
 		}
 
 		log.Info("Created drift analysis run: ", run.Uuid)

@@ -27,9 +27,8 @@ func NewSyncOrganization(orgRepository repository.GitOrgRepository, repoReposito
 	}
 }
 
-func (so SyncOrganization) StartSyncLoop() {
+func (so SyncOrganization) StartSyncLoop(ctx context.Context) {
 	for {
-		ctx := context.Background()
 		err := so.orgSyncRepository.WithTx(ctx, func(ctx context.Context) error {
 			orgSync, err := so.orgSyncRepository.FindOnePending(ctx)
 			if err != nil {
@@ -63,7 +62,12 @@ func (so SyncOrganization) StartSyncLoop() {
 		if err != nil {
 			log.Errorf("error handling sync transaction: %v", err)
 		}
-		time.Sleep(2 * time.Second)
+		select {
+		case <-ctx.Done():
+			log.Info("org sync loop shutting down...")
+			return
+		case <-time.After(2 * time.Second):
+		}
 	}
 }
 

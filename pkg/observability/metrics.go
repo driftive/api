@@ -25,6 +25,9 @@ type Metrics struct {
 	TokenRefreshFailure   metric.Int64Counter
 	TokenRefreshDisabled  metric.Int64Counter
 	TokenRefreshRateLimit metric.Int64Counter
+
+	// Background job supervisor metrics
+	BgJobPanicsTotal metric.Int64Counter
 }
 
 // metricsInstance is the singleton instance
@@ -123,6 +126,14 @@ func createMetrics(meter metric.Meter) (*Metrics, error) {
 		return nil, err
 	}
 
+	bgJobPanicsTotal, err := meter.Int64Counter(
+		"bg_job_panics_total",
+		metric.WithDescription("Number of times a supervised background job has panicked (by job name)"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Metrics{
 		meter:                 meter,
 		TokenRefreshTotal:     tokenRefreshTotal,
@@ -130,5 +141,6 @@ func createMetrics(meter metric.Meter) (*Metrics, error) {
 		TokenRefreshFailure:   tokenRefreshFailure,
 		TokenRefreshDisabled:  tokenRefreshDisabled,
 		TokenRefreshRateLimit: tokenRefreshRateLimit,
+		BgJobPanicsTotal:      bgJobPanicsTotal,
 	}, nil
 }

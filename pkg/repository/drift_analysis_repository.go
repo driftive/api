@@ -11,6 +11,7 @@ import (
 type DriftAnalysisRepository interface {
 	CreateDriftAnalysisRun(ctx context.Context, params queries.CreateDriftAnalysisRunParams) (queries.DriftAnalysisRun, error)
 	CreateDriftAnalysisProject(ctx context.Context, params queries.CreateDriftAnalysisProjectParams) (queries.DriftAnalysisProject, error)
+	CreateDriftAnalysisProjectsBatch(ctx context.Context, rows []queries.CreateDriftAnalysisProjectsBatchParams) (int64, error)
 	FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error)
 	FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error)
 	FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (queries.DriftAnalysisRun, error)
@@ -40,6 +41,10 @@ func (r *DriftAnalysisRepo) CreateDriftAnalysisRun(ctx context.Context, params q
 
 func (r *DriftAnalysisRepo) CreateDriftAnalysisProject(ctx context.Context, params queries.CreateDriftAnalysisProjectParams) (queries.DriftAnalysisProject, error) {
 	return r.db.Queries(ctx).CreateDriftAnalysisProject(ctx, params)
+}
+
+func (r *DriftAnalysisRepo) CreateDriftAnalysisProjectsBatch(ctx context.Context, rows []queries.CreateDriftAnalysisProjectsBatchParams) (int64, error) {
+	return r.db.Queries(ctx).CreateDriftAnalysisProjectsBatch(ctx, rows)
 }
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error) {

@@ -13,6 +13,10 @@ INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, s
 VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr)
 RETURNING *;
 
+-- name: CreateDriftAnalysisProjectsBatch :copyfrom
+INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr)
+VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr);
+
 -- name: FindDriftAnalysisRunsByRepositoryId :many
 SELECT *
 FROM drift_analysis_run
