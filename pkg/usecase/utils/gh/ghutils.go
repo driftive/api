@@ -12,20 +12,18 @@ import (
 
 	"driftive.cloud/api/pkg/repository"
 	"github.com/gofiber/fiber/v3/log"
-	"github.com/google/go-github/v85/github"
+	"github.com/google/go-github/v88/github"
 	"github.com/jferrl/go-githubauth"
 	"golang.org/x/oauth2"
 )
 
-func NewDefaultGithubClient(token string) *github.Client {
+func NewDefaultGithubClient(token string) (*github.Client, error) {
 	httpClient := http.Client{}
-	ghClient := github.NewClient(&httpClient)
-
+	opts := []github.ClientOptionsFunc{github.WithHTTPClient(&httpClient)}
 	if token != "" {
-		return ghClient.WithAuthToken(token)
+		opts = append(opts, github.WithAuthToken(token))
 	}
-
-	return ghClient
+	return github.NewClient(opts...)
 }
 
 func NewUserGithubClient(ctx context.Context, userId int64, usersRepository repository.UserRepository) (*github.Client, error) {
@@ -34,7 +32,7 @@ func NewUserGithubClient(ctx context.Context, userId int64, usersRepository repo
 		return nil, err
 	}
 
-	return NewDefaultGithubClient(user.AccessToken), nil
+	return NewDefaultGithubClient(user.AccessToken)
 }
 
 func NewAppGithubInstallationClient(ctx context.Context, installationId int64) (*github.Client, error) {
@@ -53,8 +51,7 @@ func NewAppGithubInstallationClient(ctx context.Context, installationId int64) (
 	installationTokenSource := githubauth.NewInstallationTokenSource(installationId, appTokenSource)
 
 	oauth2HttpClient := oauth2.NewClient(ctx, installationTokenSource)
-	ghClient := github.NewClient(oauth2HttpClient)
-	return ghClient, nil
+	return github.NewClient(github.WithHTTPClient(oauth2HttpClient))
 }
 
 func NewAppGithubClient(ctx context.Context) (*github.Client, error) {
@@ -71,8 +68,7 @@ func NewAppGithubClient(ctx context.Context) (*github.Client, error) {
 	}
 
 	oauth2HttpClient := oauth2.NewClient(ctx, appTokenSource)
-	ghClient := github.NewClient(oauth2HttpClient)
-	return ghClient, nil
+	return github.NewClient(github.WithHTTPClient(oauth2HttpClient))
 }
 
 func ParseOrgRole(role string) string {

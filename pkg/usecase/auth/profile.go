@@ -28,7 +28,11 @@ func (h *ProfileHandler) GetLoggedUser(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	ghClient := gh.NewDefaultGithubClient(dbUser.AccessToken)
+	ghClient, err := gh.NewDefaultGithubClient(dbUser.AccessToken)
+	if err != nil {
+		log.Error("error creating github client. ", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
 	ghUser, _, err := ghClient.Users.Get(c.Context(), "")
 	if err != nil {
 		log.Error("error getting github user. ", err)

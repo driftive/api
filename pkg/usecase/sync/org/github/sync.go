@@ -9,7 +9,7 @@ import (
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"errors"
 	"github.com/gofiber/fiber/v3/log"
-	"github.com/google/go-github/v85/github"
+	"github.com/google/go-github/v88/github"
 	"time"
 )
 
@@ -152,7 +152,7 @@ func (so SyncOrganization) SyncInstallationIdByOrgId(ctx context.Context, orgId 
 		return
 	}
 
-	installation, _, err := ghClient.Apps.FindOrganizationInstallation(ctx, org.Name)
+	installation, _, err := ghClient.Apps.GetOrganizationInstallation(ctx, org.Name)
 	if err != nil {
 		log.Error("error fetching installations for org: ", org.Name)
 		return

@@ -198,7 +198,11 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	ghClient := gh.NewDefaultGithubClient(tokenResponse.AccessToken)
+	ghClient, err := gh.NewDefaultGithubClient(tokenResponse.AccessToken)
+	if err != nil {
+		log.Errorf("Failed to create github client: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
 	user, _, err := ghClient.Users.Get(c.Context(), "")
 	if err != nil {
 		log.Errorf("Failed to get user: %v", err)
