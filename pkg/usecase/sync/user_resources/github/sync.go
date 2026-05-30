@@ -127,9 +127,12 @@ func (s *UserResourceSyncer) SyncUserResources(ctx context.Context, userId int64
 	return nil
 }
 
-func (s *UserResourceSyncer) StartSyncLoop() {
+func (s *UserResourceSyncer) StartSyncLoop(ctx context.Context) {
 	for {
-		ctx := context.Background()
+		if ctx.Err() != nil {
+			log.Info("user resource sync loop shutting down...")
+			return
+		}
 		err := s.syncStatusRepository.WithTx(ctx, func(ctx context.Context) error {
 			result, err := s.syncStatusRepository.FindOnePendingSyncStatusUser(ctx)
 			if err != nil {
@@ -145,7 +148,10 @@ func (s *UserResourceSyncer) StartSyncLoop() {
 				}
 			} else {
 				log.Debug("no pending sync status user found")
-				time.Sleep(5 * time.Second)
+				select {
+				case <-ctx.Done():
+				case <-time.After(5 * time.Second):
+				}
 			}
 			return nil
 		})

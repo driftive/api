@@ -164,10 +164,12 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Start background jobs with cancellable context
-	go ghTokenRefresher.RefreshTokens(ctx)
-	go userSync.StartSyncLoop()
-	go orgSync.StartSyncLoop()
+	// Start background jobs with cancellable context. Each runs under
+	// observability.SuperviseLoop so a panic produces a metric + log instead
+	// of silently killing the loop.
+	go observability.SuperviseLoop(ctx, "gh_token_refresher", ghTokenRefresher.RefreshTokens)
+	go observability.SuperviseLoop(ctx, "user_sync", userSync.StartSyncLoop)
+	go observability.SuperviseLoop(ctx, "org_sync", orgSync.StartSyncLoop)
 
 	// Handle shutdown signals
 	go func() {

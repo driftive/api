@@ -206,10 +206,6 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 	}
 
 	err = o.db.WithTx(ctx, func(ctx context.Context) error {
-		if err != nil {
-			return err
-		}
-
 		accessTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.ExpiresIn), 0)
 		refreshTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.RefreshTokenExpiresIn), 0)
 
@@ -225,7 +221,7 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 			RefreshTokenExpiresAt: &refreshTokenExpiresAt,
 		}
 
-		_, err = o.userRepository.UpsertUserOnLogin(ctx, upsertUserParams)
+		_, err := o.userRepository.UpsertUserOnLogin(ctx, upsertUserParams)
 		if err != nil {
 			return err
 		}
@@ -236,14 +232,14 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 		existingUser, err := o.userRepository.FindUserByProviderAndProviderId(ctx, args)
 		if err != nil {
 			log.Error("error finding user by provider and provider id: ", err)
-			return c.SendStatus(fiber.StatusInternalServerError)
+			return err
 		}
 
 		_, err = o.syncStatusUserRepository.CreateOrUpdateSyncStatusUser(ctx, existingUser.ID)
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				log.Error("error creating sync status user: ", err)
-				return c.SendStatus(fiber.StatusInternalServerError)
+				return err
 			}
 		}
 
@@ -255,7 +251,7 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 		jwtToken, err := jwt.GenerateJWTToken(userToken, o.cfg.Auth.JwtSecret)
 		if err != nil {
 			log.Error("error generating jwt token: ", err)
-			return c.SendStatus(fiber.StatusInternalServerError)
+			return err
 		}
 
 		// Use redirect URL from state if provided and allowed, otherwise use default
