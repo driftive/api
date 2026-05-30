@@ -178,6 +178,56 @@ func TestDriftIngest_HappyPath(t *testing.T) {
 	if projectCount != 3 {
 		t.Errorf("expected 3 projects, got %d", projectCount)
 	}
+
+	rows, err := pool.Query(ctx,
+		`SELECT p.dir, p.type, p.drifted, p.succeeded, p.init_output, p.plan_output, p.skipped_due_to_pr
+		 FROM drift_analysis_project p
+		 JOIN drift_analysis_run r ON r.uuid = p.drift_analysis_run_id
+		 WHERE r.repository_id = $1
+		 ORDER BY p.dir`, repoID)
+	if err != nil {
+		t.Fatalf("query projects: %v", err)
+	}
+	defer rows.Close()
+	type projRow struct {
+		dir, ptype                string
+		drifted, succeeded, skipd bool
+		initOut, planOut          *string
+	}
+	var gotRows []projRow
+	for rows.Next() {
+		var r projRow
+		if err := rows.Scan(&r.dir, &r.ptype, &r.drifted, &r.succeeded, &r.initOut, &r.planOut, &r.skipd); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		gotRows = append(gotRows, r)
+	}
+	wantRows := []projRow{
+		{dir: "/projects/a", ptype: "TERRAFORM", drifted: true, succeeded: true, initOut: ptr("init-a"), planOut: ptr("plan-a"), skipd: false},
+		{dir: "/projects/b", ptype: "TOFU", drifted: false, succeeded: true, initOut: ptr("init-b"), planOut: ptr("plan-b"), skipd: false},
+		{dir: "/projects/c", ptype: "TERRAGRUNT", drifted: false, succeeded: true, initOut: ptr(""), planOut: ptr(""), skipd: true},
+	}
+	if len(gotRows) != len(wantRows) {
+		t.Fatalf("got %d rows, want %d", len(gotRows), len(wantRows))
+	}
+	for i := range wantRows {
+		if gotRows[i].dir != wantRows[i].dir || gotRows[i].ptype != wantRows[i].ptype ||
+			gotRows[i].drifted != wantRows[i].drifted || gotRows[i].succeeded != wantRows[i].succeeded ||
+			gotRows[i].skipd != wantRows[i].skipd ||
+			!strPtrEq(gotRows[i].initOut, wantRows[i].initOut) ||
+			!strPtrEq(gotRows[i].planOut, wantRows[i].planOut) {
+			t.Errorf("row %d mismatch:\n got=%+v\nwant=%+v", i, gotRows[i], wantRows[i])
+		}
+	}
+}
+
+func ptr(s string) *string { return &s }
+
+func strPtrEq(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 func TestDriftIngest_InvalidToken(t *testing.T) {

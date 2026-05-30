@@ -3,17 +3,16 @@ package observability
 import (
 	"context"
 	"runtime/debug"
+	"time"
 
 	"github.com/gofiber/fiber/v3/log"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 )
 
-// SuperviseLoop runs fn in a panic-safe loop until ctx is cancelled. fn is
-// expected to be a long-running daemon that returns only when ctx is done; if
-// it returns earlier or panics, the supervisor restarts it. Every panic is
-// logged with a stack trace and emits the bg_job_panics_total counter so
-// silent crashes show up in alerting instead of just stopping the loop.
+const superviseRestartBackoff = time.Second
+
+// SuperviseLoop runs fn in a panic-safe loop until ctx is cancelled.
 func SuperviseLoop(ctx context.Context, name string, fn func(context.Context)) {
 	for {
 		if ctx.Err() != nil {
@@ -21,6 +20,12 @@ func SuperviseLoop(ctx context.Context, name string, fn func(context.Context)) {
 			return
 		}
 		runOnce(ctx, name, fn)
+		select {
+		case <-ctx.Done():
+			log.Infof("supervised loop %q exiting: %v", name, ctx.Err())
+			return
+		case <-time.After(superviseRestartBackoff):
+		}
 	}
 }
 

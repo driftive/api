@@ -147,7 +147,7 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 	for i, project := range state.ProjectResults {
 		projectType, err := projectTypeToDBString(project.Project.Type)
 		if err != nil {
-			log.Errorf("Invalid project type %q at index %d: %v", project.Project.Type, i, err)
+			log.Errorf("Invalid project type %v at index %d: %v", project.Project.Type, i, err)
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 		projectTypes[i] = projectType
