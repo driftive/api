@@ -12,7 +12,7 @@ import (
 	"errors"
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/log"
-	"github.com/google/go-github/v85/github"
+	"github.com/google/go-github/v88/github"
 	"time"
 )
 
@@ -48,7 +48,11 @@ func (s *UserResourceSyncer) SyncUserResources(ctx context.Context, userId int64
 		log.Errorf("error finding user by id: %v", err)
 	}
 
-	ghClient := gh.NewDefaultGithubClient(user.AccessToken)
+	ghClient, err := gh.NewDefaultGithubClient(user.AccessToken)
+	if err != nil {
+		log.Errorf("error creating github client: %v", err)
+		return err
+	}
 
 	var allOrgs []*github.Organization
 	opts := &github.ListOptions{PerPage: 100} // Fetch up to 100 orgs per page
