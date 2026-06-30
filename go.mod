@@ -10,7 +10,7 @@ require (
 	github.com/google/go-github/v88 v88.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/jferrl/go-githubauth v1.6.0
+	github.com/jferrl/go-githubauth v1.7.0
 	github.com/joho/godotenv v1.5.1
 	github.com/moby/moby/api v1.54.2
 	github.com/ory/dockertest/v4 v4.0.0
