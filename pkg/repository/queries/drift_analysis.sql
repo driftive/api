@@ -9,13 +9,13 @@ FROM drift_analysis_run
 WHERE repository_id = @repository_id AND idempotency_key = @idempotency_key;
 
 -- name: CreateDriftAnalysisProject :one
-INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr)
-VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr)
+INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr, resources_added, resources_changed, resources_destroyed)
+VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr, @resources_added, @resources_changed, @resources_destroyed)
 RETURNING *;
 
 -- name: CreateDriftAnalysisProjectsBatch :copyfrom
-INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr)
-VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr);
+INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr, resources_added, resources_changed, resources_destroyed)
+VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr, @resources_added, @resources_changed, @resources_destroyed);
 
 -- name: FindDriftAnalysisRunsByRepositoryId :many
 SELECT *

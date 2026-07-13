@@ -14,9 +14,9 @@ import (
 )
 
 const createDriftAnalysisProject = `-- name: CreateDriftAnalysisProject :one
-INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr
+INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr, resources_added, resources_changed, resources_destroyed)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr, resources_added, resources_changed, resources_destroyed
 `
 
 type CreateDriftAnalysisProjectParams struct {
@@ -28,6 +28,9 @@ type CreateDriftAnalysisProjectParams struct {
 	InitOutput         *string
 	PlanOutput         *string
 	SkippedDueToPr     bool
+	ResourcesAdded     *int32
+	ResourcesChanged   *int32
+	ResourcesDestroyed *int32
 }
 
 func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDriftAnalysisProjectParams) (DriftAnalysisProject, error) {
@@ -40,6 +43,9 @@ func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDrif
 		arg.InitOutput,
 		arg.PlanOutput,
 		arg.SkippedDueToPr,
+		arg.ResourcesAdded,
+		arg.ResourcesChanged,
+		arg.ResourcesDestroyed,
 	)
 	var i DriftAnalysisProject
 	err := row.Scan(
@@ -52,6 +58,9 @@ func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDrif
 		&i.InitOutput,
 		&i.PlanOutput,
 		&i.SkippedDueToPr,
+		&i.ResourcesAdded,
+		&i.ResourcesChanged,
+		&i.ResourcesDestroyed,
 	)
 	return i, err
 }
@@ -65,6 +74,9 @@ type CreateDriftAnalysisProjectsBatchParams struct {
 	InitOutput         *string
 	PlanOutput         *string
 	SkippedDueToPr     bool
+	ResourcesAdded     *int32
+	ResourcesChanged   *int32
+	ResourcesDestroyed *int32
 }
 
 const createDriftAnalysisRun = `-- name: CreateDriftAnalysisRun :one
@@ -133,7 +145,7 @@ func (q *Queries) DeleteOldestRunsExceedingLimit(ctx context.Context, arg Delete
 }
 
 const findDriftAnalysisProjectsByRunId = `-- name: FindDriftAnalysisProjectsByRunId :many
-SELECT id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr
+SELECT id, drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr, resources_added, resources_changed, resources_destroyed
 FROM drift_analysis_project
 WHERE drift_analysis_run_id = $1
 ORDER BY
@@ -165,6 +177,9 @@ func (q *Queries) FindDriftAnalysisProjectsByRunId(ctx context.Context, driftAna
 			&i.InitOutput,
 			&i.PlanOutput,
 			&i.SkippedDueToPr,
+			&i.ResourcesAdded,
+			&i.ResourcesChanged,
+			&i.ResourcesDestroyed,
 		); err != nil {
 			return nil, err
 		}

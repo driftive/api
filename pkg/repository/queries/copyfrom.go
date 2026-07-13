@@ -37,6 +37,9 @@ func (r iteratorForCreateDriftAnalysisProjectsBatch) Values() ([]interface{}, er
 		r.rows[0].InitOutput,
 		r.rows[0].PlanOutput,
 		r.rows[0].SkippedDueToPr,
+		r.rows[0].ResourcesAdded,
+		r.rows[0].ResourcesChanged,
+		r.rows[0].ResourcesDestroyed,
 	}, nil
 }
 
@@ -45,5 +48,5 @@ func (r iteratorForCreateDriftAnalysisProjectsBatch) Err() error {
 }
 
 func (q *Queries) CreateDriftAnalysisProjectsBatch(ctx context.Context, arg []CreateDriftAnalysisProjectsBatchParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"drift_analysis_project"}, []string{"drift_analysis_run_id", "dir", "type", "drifted", "succeeded", "init_output", "plan_output", "skipped_due_to_pr"}, &iteratorForCreateDriftAnalysisProjectsBatch{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"drift_analysis_project"}, []string{"drift_analysis_run_id", "dir", "type", "drifted", "succeeded", "init_output", "plan_output", "skipped_due_to_pr", "resources_added", "resources_changed", "resources_destroyed"}, &iteratorForCreateDriftAnalysisProjectsBatch{rows: arg})
 }

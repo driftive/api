@@ -20,6 +20,9 @@ type DriftAnalysisProject struct {
 	InitOutput         *string
 	PlanOutput         *string
 	SkippedDueToPr     bool
+	ResourcesAdded     *int32
+	ResourcesChanged   *int32
+	ResourcesDestroyed *int32
 }
 
 type DriftAnalysisRun struct {

@@ -176,6 +176,7 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 		if len(state.ProjectResults) > 0 {
 			batch := make([]queries.CreateDriftAnalysisProjectsBatchParams, len(state.ProjectResults))
 			for i, project := range state.ProjectResults {
+				added, changed, destroyed := ParsePlanSummary(project.PlanOutput)
 				batch[i] = queries.CreateDriftAnalysisProjectsBatchParams{
 					DriftAnalysisRunID: run.Uuid,
 					Dir:                project.Project.Dir,
@@ -185,6 +186,9 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 					InitOutput:         &project.InitOutput,
 					PlanOutput:         &project.PlanOutput,
 					SkippedDueToPr:     project.SkippedDueToPR,
+					ResourcesAdded:     added,
+					ResourcesChanged:   changed,
+					ResourcesDestroyed: destroyed,
 				}
 			}
 			inserted, err := d.driftAnalysisRepository.CreateDriftAnalysisProjectsBatch(ctx, batch)

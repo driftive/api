@@ -15,15 +15,18 @@ type DriftAnalysisRunDTO struct {
 }
 
 type DriftAnalysisProjectDTO struct {
-	Id             int64   `json:"id"`
-	RunId          string  `json:"run_id"`
-	Dir            string  `json:"dir"`
-	Type           string  `json:"type"`
-	Drifted        bool    `json:"drifted"`
-	Succeeded      bool    `json:"succeeded"`
-	InitOutput     *string `json:"init_output"`
-	PlanOutput     *string `json:"plan_output"`
-	SkippedDueToPr bool    `json:"skipped_due_to_pr"`
+	Id                 int64   `json:"id"`
+	RunId              string  `json:"run_id"`
+	Dir                string  `json:"dir"`
+	Type               string  `json:"type"`
+	Drifted            bool    `json:"drifted"`
+	Succeeded          bool    `json:"succeeded"`
+	InitOutput         *string `json:"init_output"`
+	PlanOutput         *string `json:"plan_output"`
+	SkippedDueToPr     bool    `json:"skipped_due_to_pr"`
+	ResourcesAdded     *int32  `json:"resources_added"`
+	ResourcesChanged   *int32  `json:"resources_changed"`
+	ResourcesDestroyed *int32  `json:"resources_destroyed"`
 }
 
 type DriftAnalysisRunWithProjectsDTO struct {

@@ -230,6 +230,85 @@ func strPtrEq(a, b *string) bool {
 	return *a == *b
 }
 
+// TestDriftIngest_ParsesResourceCounts verifies HandleUpdate parses the plan
+// summary line at ingest and persists resources_added/changed/destroyed, leaving
+// them null when there is no summary line.
+func TestDriftIngest_ParsesResourceCounts(t *testing.T) {
+	truncateAll(t)
+	repoID := seedOrgAndRepo(t)
+	app := newIngestApp(t)
+
+	totalErrored := int32(0)
+	state := drift_stream.DriftDetectionResult{
+		ProjectResults: []drift_stream.DriftProjectResult{
+			{
+				Project:    drift_stream.TypedProject{Dir: "/projects/with-plan", Type: drift_stream.Tofu},
+				Drifted:    true,
+				Succeeded:  true,
+				InitOutput: "init",
+				PlanOutput: "OpenTofu will perform the following actions:\n\nPlan: 2 to add, 1 to change, 3 to destroy.\n",
+			},
+			{
+				Project:    drift_stream.TypedProject{Dir: "/projects/no-plan", Type: drift_stream.Terraform},
+				Drifted:    false,
+				Succeeded:  true,
+				InitOutput: "init",
+				PlanOutput: "No changes. Your infrastructure matches the configuration.",
+			},
+		},
+		TotalDrifted:  1,
+		TotalErrored:  &totalErrored,
+		TotalSkipped:  0,
+		TotalProjects: 2,
+		TotalChecked:  2,
+		Duration:      100 * time.Millisecond,
+	}
+
+	status, body := postIngest(t, app, seedAnalysisToken, "", state)
+	if status != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", status, string(body))
+	}
+
+	ctx := context.Background()
+	pool := withPool(t)
+	rows, err := pool.Query(ctx,
+		`SELECT p.dir, p.resources_added, p.resources_changed, p.resources_destroyed
+		 FROM drift_analysis_project p
+		 JOIN drift_analysis_run r ON r.uuid = p.drift_analysis_run_id
+		 WHERE r.repository_id = $1
+		 ORDER BY p.dir`, repoID)
+	if err != nil {
+		t.Fatalf("query projects: %v", err)
+	}
+	defer rows.Close()
+
+	type countRow struct {
+		dir           string
+		add, chg, dst *int32
+	}
+	var got []countRow
+	for rows.Next() {
+		var r countRow
+		if err := rows.Scan(&r.dir, &r.add, &r.chg, &r.dst); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		got = append(got, r)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(got))
+	}
+	// ORDER BY dir: /projects/no-plan first, /projects/with-plan second.
+	if got[0].add != nil || got[0].chg != nil || got[0].dst != nil {
+		t.Errorf("no-plan project: expected nil counts, got %v/%v/%v", got[0].add, got[0].chg, got[0].dst)
+	}
+	if got[1].add == nil || got[1].chg == nil || got[1].dst == nil {
+		t.Fatalf("with-plan project: expected non-nil counts, got %v/%v/%v", got[1].add, got[1].chg, got[1].dst)
+	}
+	if *got[1].add != 2 || *got[1].chg != 1 || *got[1].dst != 3 {
+		t.Errorf("with-plan counts = %d/%d/%d, want 2/1/3", *got[1].add, *got[1].chg, *got[1].dst)
+	}
+}
+
 func TestDriftIngest_InvalidToken(t *testing.T) {
 	truncateAll(t)
 	seedOrgAndRepo(t)
