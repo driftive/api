@@ -7,8 +7,16 @@ services:
       dockerfile: Dockerfile.multi-stage
     restart: always
     depends_on:
-      migrations:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: driftive
+      DB_PASSWORD: driftive
+      DB_NAME: driftive
+      AUTO_MIGRATE: "true"
+      JWT_SECRET: local-dev-secret-change-me-32-chars-min
     ports:
       - "3000:3000"
 #    volumes:
@@ -23,9 +31,8 @@ services:
       POSTGRES_DB: driftive
     ports:
       - "5432:5432"
-  migrations:
-    image: flyway/flyway
-    command: -url=jdbc:postgresql://postgres:5432/driftive -user=driftive -password=driftive -connectRetries=60 migrate
-    volumes:
-      - ./migrations:/flyway/sql
-
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U driftive -d driftive"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

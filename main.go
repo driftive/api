@@ -78,6 +78,11 @@ func main() {
 	if err != nil {
 		log.Panic("error connecting to database. ", err)
 	}
+
+	if err := db.RunMigrations(context.Background(), *cfg, migrationsFS); err != nil {
+		log.Panic("error running migrations. ", err)
+	}
+
 	repo := repository.NewRepository(db_, cfg)
 
 	app := fiber.New()
