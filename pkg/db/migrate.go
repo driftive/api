@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -19,7 +18,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func RunMigrations(ctx context.Context, cfg config.Config, fsys fs.FS) error {
+func RunMigrations(cfg config.Config, fsys fs.FS) error {
 	if !boolEnv("AUTO_MIGRATE", true) {
 		log.Info("AUTO_MIGRATE disabled, skipping migrations")
 		return nil
@@ -34,10 +33,6 @@ func RunMigrations(ctx context.Context, cfg config.Config, fsys fs.FS) error {
 		return fmt.Errorf("open migration db: %w", err)
 	}
 	defer sqlDB.Close()
-
-	if err := baselineFromFlyway(ctx, sqlDB); err != nil {
-		return fmt.Errorf("flyway baseline: %w", err)
-	}
 
 	src, err := iofs.New(fsys, "migrations")
 	if err != nil {
