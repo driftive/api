@@ -274,6 +274,10 @@ func (r *TokenRefresher) processOneToken(ctx context.Context, expiryThreshold ti
 	var user queries.User
 	var refreshErr error
 
+	// Unlike the sync loops, the RefreshToken network call stays inside the transaction on
+	// purpose: GitHub rotates refresh tokens, so the FOR UPDATE SKIP LOCKED row lock has to
+	// span the exchange or two API instances race and invalidate each other's token. The loop
+	// is sequential per instance, so this holds at most one pool connection at a time.
 	err := r.userRepository.WithTx(ctx, func(txCtx context.Context) error {
 		var err error
 		user, err = r.userRepository.FindAndLockExpiringToken(txCtx, queries.FindAndLockExpiringTokenParams{

@@ -9,6 +9,17 @@ import (
 	"context"
 )
 
+const clearRepositoryAnalysisToken = `-- name: ClearRepositoryAnalysisToken :exec
+UPDATE git_repository
+SET analysis_token = NULL
+WHERE id = $1
+`
+
+func (q *Queries) ClearRepositoryAnalysisToken(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, clearRepositoryAnalysisToken, id)
+	return err
+}
+
 const createOrUpdateRepository = `-- name: CreateOrUpdateRepository :one
 INSERT INTO git_repository (organization_id, provider_id, name, is_private)
 VALUES ($1, $2, $3, $4)

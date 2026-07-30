@@ -1,29 +1,35 @@
 package repos
 
 import (
+	"context"
+
 	"driftive.cloud/api/pkg/repository"
 	"driftive.cloud/api/pkg/repository/queries"
 	"driftive.cloud/api/pkg/usecase/utils/auth"
 	"driftive.cloud/api/pkg/usecase/utils/parsing"
 	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/log"
 	"github.com/google/uuid"
 )
 
 type GitRepositoryHandler struct {
-	userRepository repository.UserRepository
-	repoRepository repository.GitRepositoryRepository
-	orgRepository  repository.GitOrgRepository
+	userRepository          repository.UserRepository
+	repoRepository          repository.GitRepositoryRepository
+	orgRepository           repository.GitOrgRepository
+	driftAnalysisRepository repository.DriftAnalysisRepository
 }
 
 func NewGitRepositoryHandler(
 	orgRepository repository.GitOrgRepository,
 	repoRepository repository.GitRepositoryRepository,
 	userRepository repository.UserRepository,
+	driftAnalysisRepository repository.DriftAnalysisRepository,
 ) *GitRepositoryHandler {
 	return &GitRepositoryHandler{
-		userRepository: userRepository,
-		repoRepository: repoRepository,
-		orgRepository:  orgRepository,
+		userRepository:          userRepository,
+		repoRepository:          repoRepository,
+		orgRepository:           orgRepository,
+		driftAnalysisRepository: driftAnalysisRepository,
 	}
 }
 
@@ -94,6 +100,48 @@ func (h *GitRepositoryHandler) GetRepoTokenById(c fiber.Ctx) error {
 	}
 
 	return c.JSON(tokenResponse)
+}
+
+// EraseRepositoryData removes every drift analysis run for a repository (project rows follow
+// via ON DELETE CASCADE) and revokes its analysis token. The git_repository row itself is kept:
+// it is owned by the GitHub org sync, which would re-create it on the next pass anyway.
+func (h *GitRepositoryHandler) EraseRepositoryData(c fiber.Ctx) error {
+	userId, err := auth.MustGetLoggedUserId(c)
+	if err != nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+	repoIdStr := c.Params("repo_id")
+	if repoIdStr == "" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+	repoId := parsing.StringToInt64(repoIdStr)
+
+	// Check if user is a member of the organization
+	isMember, err := h.orgRepository.IsUserMemberOfOrganizationByRepoId(c.Context(), repoId, *userId)
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+	if !isMember {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	err = h.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
+		if err := h.driftAnalysisRepository.DeleteDriftAnalysisRunsByRepositoryId(ctx, repoId); err != nil {
+			log.Errorf("Error deleting drift analysis runs for repository %d: %v", repoId, err)
+			return err
+		}
+		if err := h.repoRepository.ClearRepositoryAnalysisToken(ctx, repoId); err != nil {
+			log.Errorf("Error clearing analysis token for repository %d: %v", repoId, err)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	log.Infof("Erased analysis data for repository %d", repoId)
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func (h *GitRepositoryHandler) RegenerateToken(c fiber.Ctx) error {

@@ -209,6 +209,7 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
+	var existingUser queries.User
 	err = o.db.WithTx(ctx, func(ctx context.Context) error {
 		accessTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.ExpiresIn), 0)
 		refreshTokenExpiresAt := time.Unix(epoch+int64(tokenResponse.RefreshTokenExpiresIn), 0)
@@ -233,7 +234,7 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 			Provider:   "GITHUB",
 			ProviderID: fmt.Sprintf("%d", user.GetID()),
 		}
-		existingUser, err := o.userRepository.FindUserByProviderAndProviderId(ctx, args)
+		existingUser, err = o.userRepository.FindUserByProviderAndProviderId(ctx, args)
 		if err != nil {
 			log.Error("error finding user by provider and provider id: ", err)
 			return err
@@ -247,31 +248,7 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 			}
 		}
 
-		userToken := auth.UserToken{
-			ID:       existingUser.ID,
-			Provider: "GITHUB",
-		}
-
-		jwtToken, err := jwt.GenerateJWTToken(userToken, o.cfg.Auth.JwtSecret)
-		if err != nil {
-			log.Error("error generating jwt token: ", err)
-			return err
-		}
-
-		// Use redirect URL from state if provided and allowed, otherwise use default
-		redirectURL := o.cfg.Auth.LoginRedirectUrl
-		if stateClaims.RedirectURL != "" {
-			// Re-validate redirect URL as defense-in-depth
-			if o.isAllowedRedirectURL(stateClaims.RedirectURL) {
-				redirectURL = stateClaims.RedirectURL
-			} else {
-				log.Warnf("rejected redirect URL from state (tampered?): %s", stateClaims.RedirectURL)
-			}
-		}
-
-		return c.Redirect().Status(fiber.StatusFound).To(
-			fmt.Sprintf("%s?token=%s", redirectURL, jwtToken),
-		)
+		return nil
 	})
 
 	if err != nil {
@@ -279,7 +256,31 @@ func (o *OAuthHandler) Callback(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	return nil
+	userToken := auth.UserToken{
+		ID:       existingUser.ID,
+		Provider: "GITHUB",
+	}
+
+	jwtToken, err := jwt.GenerateJWTToken(userToken, o.cfg.Auth.JwtSecret)
+	if err != nil {
+		log.Error("error generating jwt token: ", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	// Use redirect URL from state if provided and allowed, otherwise use default
+	redirectURL := o.cfg.Auth.LoginRedirectUrl
+	if stateClaims.RedirectURL != "" {
+		// Re-validate redirect URL as defense-in-depth
+		if o.isAllowedRedirectURL(stateClaims.RedirectURL) {
+			redirectURL = stateClaims.RedirectURL
+		} else {
+			log.Warnf("rejected redirect URL from state (tampered?): %s", stateClaims.RedirectURL)
+		}
+	}
+
+	return c.Redirect().Status(fiber.StatusFound).To(
+		fmt.Sprintf("%s?token=%s", redirectURL, jwtToken),
+	)
 }
 
 func (o *OAuthHandler) ExchangeCodeForToken(ctx context.Context, oauthCode string) (*github.AccessTokenResponse, error) {

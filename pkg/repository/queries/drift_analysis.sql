@@ -170,3 +170,13 @@ WHERE dar.uuid IN (
     ORDER BY r.created_at DESC
     OFFSET @max_runs_to_keep
 );
+
+-- name: CountDriftAnalysisProjectsByRunId :one
+SELECT count(*)
+FROM drift_analysis_project
+WHERE drift_analysis_run_id = @drift_analysis_run_id;
+
+-- name: DeleteDriftAnalysisRunsByRepositoryId :exec
+-- Projects are removed by the ON DELETE CASCADE on drift_analysis_project
+DELETE FROM drift_analysis_run
+WHERE repository_id = @repository_id;

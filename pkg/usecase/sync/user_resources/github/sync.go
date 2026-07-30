@@ -13,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/log"
 	"github.com/google/go-github/v88/github"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -137,30 +138,27 @@ func (s *UserResourceSyncer) StartSyncLoop(ctx context.Context) {
 			log.Info("user resource sync loop shutting down...")
 			return
 		}
-		err := s.syncStatusRepository.WithTx(ctx, func(ctx context.Context) error {
-			result, err := s.syncStatusRepository.FindOnePendingSyncStatusUser(ctx)
-			if err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					log.Errorf("error finding pending sync status user: %v", err)
-				}
-			}
 
-			if result.ID != 0 {
-				err = s.SyncUserResources(ctx, result.UserID)
-				if err != nil {
-					log.Errorf("error syncing user resources: %v", err)
-				}
+		// The claim is a single atomic statement, so no transaction is held across the
+		// GitHub calls in SyncUserResources.
+		claimed, err := s.syncStatusRepository.ClaimOnePendingSyncStatusUser(ctx)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) && !errors.Is(err, pgx.ErrNoRows) {
+				log.Errorf("error claiming pending sync status user: %v", err)
 			} else {
 				log.Debug("no pending sync status user found")
-				select {
-				case <-ctx.Done():
-				case <-time.After(5 * time.Second):
-				}
 			}
-			return nil
-		})
-		if err != nil {
-			log.Errorf("error handling sync transaction: %v", err)
+			select {
+			case <-ctx.Done():
+			case <-time.After(5 * time.Second):
+			}
+			continue
+		}
+
+		// A failure leaves the 5 minute backoff set by the claim; success pushes next_sync
+		// out to its real schedule via UpdateSyncStatusUserLastSyncedAt.
+		if err := s.SyncUserResources(ctx, claimed.UserID); err != nil {
+			log.Errorf("error syncing user resources: %v", err)
 		}
 	}
 }

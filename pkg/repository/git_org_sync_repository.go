@@ -8,7 +8,7 @@ import (
 
 type GitOrgSyncRepository interface {
 	CreateGitOrganizationSyncIfNotExists(ctx context.Context, orgId int64) error
-	FindOnePending(ctx context.Context) (queries.GitOrganizationSync, error)
+	ClaimOnePending(ctx context.Context) (queries.GitOrganizationSync, error)
 	UpdateSyncStatus(ctx context.Context, orgId int64) (queries.GitOrganizationSync, error)
 	WithTx(ctx context.Context, fn func(context.Context) error) error
 }
@@ -21,8 +21,8 @@ func (g GitOrgSyncRepo) CreateGitOrganizationSyncIfNotExists(ctx context.Context
 	return g.db.Queries(ctx).CreateGitOrganizationSyncIfNotExists(ctx, orgId)
 }
 
-func (g GitOrgSyncRepo) FindOnePending(ctx context.Context) (queries.GitOrganizationSync, error) {
-	return g.db.Queries(ctx).FindOnePendingSyncOrg(ctx)
+func (g GitOrgSyncRepo) ClaimOnePending(ctx context.Context) (queries.GitOrganizationSync, error) {
+	return g.db.Queries(ctx).ClaimOnePendingSyncOrg(ctx)
 }
 
 func (g GitOrgSyncRepo) UpdateSyncStatus(ctx context.Context, orgId int64) (queries.GitOrganizationSync, error) {

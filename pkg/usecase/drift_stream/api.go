@@ -103,15 +103,27 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 
 	idemKey := strings.TrimSpace(c.Get("Idempotency-Key"))
 
-	// If the client sent an Idempotency-Key and we already have a run for it, return that run
-	// without re-inserting. This lets the CLI safely retry transient failures.
+	// If the client sent an Idempotency-Key and we already have a run for it that holds
+	// results, return that run without re-inserting. This lets the CLI safely retry transient
+	// failures. A run with no project rows is adopted instead of replayed, so the results are
+	// still written rather than swallowed.
+	var adoptedRunUUID *uuid.UUID
 	if idemKey != "" {
 		existing, err := d.driftAnalysisRepository.FindRunByRepoAndIdempotencyKey(c.Context(), repo.ID, idemKey)
-		if err == nil {
-			log.Infof("Idempotent replay for repository %d, key %s -> run %s", repo.ID, idemKey, existing.Uuid)
-			return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, existing.Uuid))
-		}
-		if !errors.Is(err, pgx.ErrNoRows) {
+		switch {
+		case err == nil:
+			projectCount, countErr := d.driftAnalysisRepository.CountDriftAnalysisProjectsByRunId(c.Context(), existing.Uuid)
+			if countErr != nil {
+				log.Errorf("Error counting projects for run %s: %v", existing.Uuid, countErr)
+				return c.SendStatus(fiber.StatusInternalServerError)
+			}
+			if projectCount > 0 {
+				log.Infof("Idempotent replay for repository %d, key %s -> run %s", repo.ID, idemKey, existing.Uuid)
+				return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, existing.Uuid))
+			}
+			log.Infof("Adopting empty run %s for repository %d, key %s", existing.Uuid, repo.ID, idemKey)
+			adoptedRunUUID = &existing.Uuid
+		case !errors.Is(err, pgx.ErrNoRows):
 			log.Errorf("Error looking up run by idempotency key: %v", err)
 			return c.SendStatus(fiber.StatusInternalServerError)
 		}
@@ -155,30 +167,35 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 
 	var runUUID uuid.UUID
 	err = d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
-		params := queries.CreateDriftAnalysisRunParams{
-			Uuid:                   uuid.New(),
-			RepositoryID:           repo.ID,
-			TotalProjects:          state.TotalProjects,
-			TotalProjectsDrifted:   state.TotalDrifted,
-			TotalProjectsErrored:   totalErrored,
-			TotalProjectsSkipped:   state.TotalSkipped,
-			AnalysisDurationMillis: state.Duration.Milliseconds(),
-			IdempotencyKey:         idemKeyPtr,
-		}
+		if adoptedRunUUID != nil {
+			runUUID = *adoptedRunUUID
+		} else {
+			params := queries.CreateDriftAnalysisRunParams{
+				Uuid:                   uuid.New(),
+				RepositoryID:           repo.ID,
+				TotalProjects:          state.TotalProjects,
+				TotalProjectsDrifted:   state.TotalDrifted,
+				TotalProjectsErrored:   totalErrored,
+				TotalProjectsSkipped:   state.TotalSkipped,
+				AnalysisDurationMillis: state.Duration.Milliseconds(),
+				IdempotencyKey:         idemKeyPtr,
+			}
 
-		run, err := d.driftAnalysisRepository.CreateDriftAnalysisRun(ctx, params)
-		if err != nil {
-			log.Errorf("Error creating drift analysis run: %v", err)
-			return err
+			run, err := d.driftAnalysisRepository.CreateDriftAnalysisRun(ctx, params)
+			if err != nil {
+				log.Errorf("Error creating drift analysis run: %v", err)
+				return err
+			}
+			runUUID = run.Uuid
+			log.Info("Created drift analysis run: ", run.Uuid)
 		}
-		runUUID = run.Uuid
 
 		if len(state.ProjectResults) > 0 {
 			batch := make([]queries.CreateDriftAnalysisProjectsBatchParams, len(state.ProjectResults))
 			for i, project := range state.ProjectResults {
 				added, changed, destroyed := ParsePlanSummary(project.PlanOutput)
 				batch[i] = queries.CreateDriftAnalysisProjectsBatchParams{
-					DriftAnalysisRunID: run.Uuid,
+					DriftAnalysisRunID: runUUID,
 					Dir:                project.Project.Dir,
 					Type:               projectTypes[i],
 					Drifted:            project.Drifted,
@@ -196,10 +213,9 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 				log.Errorf("Error batch-inserting drift analysis projects: %v", err)
 				return err
 			}
-			log.Debugf("Batch-inserted %d drift analysis projects for run %s", inserted, run.Uuid)
+			log.Debugf("Batch-inserted %d drift analysis projects for run %s", inserted, runUUID)
 		}
 
-		log.Info("Created drift analysis run: ", run.Uuid)
 		return nil
 	})
 
@@ -297,15 +313,15 @@ func (d *DriftStateHandler) GetRunById(c fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
+	// The run is fetched first because the membership check needs its RepositoryID, but the
+	// project rows (which carry the init/plan output blobs) must not be loaded until the
+	// caller is authorized.
 	run, err := d.driftAnalysisRepository.FindDriftAnalysisRunByUUID(c.Context(), runId)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
 		log.Errorf("Error finding drift analysis run by ID: %v", err)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	projects, err := d.driftAnalysisRepository.FindDriftAnalysisProjectsByRunId(c.Context(), runId)
-	if err != nil {
-		log.Errorf("Error finding drift analysis projects by run ID: %v", err)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
@@ -316,6 +332,12 @@ func (d *DriftStateHandler) GetRunById(c fiber.Ctx) error {
 	}
 	if !isMember {
 		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	projects, err := d.driftAnalysisRepository.FindDriftAnalysisProjectsByRunId(c.Context(), runId)
+	if err != nil {
+		log.Errorf("Error finding drift analysis projects by run ID: %v", err)
+		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
 	runDTO := parsing.ToDriftAnalysisRunWithProjectsDTO(run, projects)
