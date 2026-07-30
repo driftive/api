@@ -46,8 +46,8 @@ func NewDB(cfg config.Config) *DB {
 }
 
 func (d *DB) Queries(ctx context.Context) *queries.Queries {
-	if ctx.Value("tx") != nil {
-		return queries.New(d.Pool).WithTx(ctx.Value("tx").(pgx.Tx))
+	if tx, ok := ctx.Value(TxType("tx")).(pgx.Tx); ok {
+		return queries.New(d.Pool).WithTx(tx)
 	}
 	return d.rawQueries
 }

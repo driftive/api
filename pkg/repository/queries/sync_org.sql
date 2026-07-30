@@ -1,9 +1,15 @@
--- name: FindOnePendingSyncOrg :one
-SELECT *
-FROM git_organization_sync
-WHERE next_sync < NOW() FOR
-    UPDATE SKIP LOCKED
-LIMIT 1;
+-- ClaimOnePendingSyncOrg atomically selects and claims one due row. The short next_sync
+-- bump is a failure backoff: on success the loop calls UpdateGitOrganizationSyncStatus,
+-- which sets the real +1 day schedule.
+-- name: ClaimOnePendingSyncOrg :one
+UPDATE git_organization_sync
+SET next_sync = NOW() + INTERVAL '5 minutes'
+WHERE organization_id = (SELECT git_organization_sync.organization_id
+                         FROM git_organization_sync
+                         WHERE git_organization_sync.next_sync < NOW()
+                         FOR UPDATE SKIP LOCKED
+                         LIMIT 1)
+RETURNING *;
 
 -- name: UpdateGitOrganizationSyncStatus :one
 UPDATE git_organization_sync

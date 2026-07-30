@@ -10,6 +10,7 @@ import (
 	"errors"
 	"github.com/gofiber/fiber/v3/log"
 	"github.com/google/go-github/v88/github"
+	"github.com/jackc/pgx/v5"
 	"time"
 )
 
@@ -29,39 +30,17 @@ func NewSyncOrganization(orgRepository repository.GitOrgRepository, repoReposito
 
 func (so SyncOrganization) StartSyncLoop(ctx context.Context) {
 	for {
-		err := so.orgSyncRepository.WithTx(ctx, func(ctx context.Context) error {
-			orgSync, err := so.orgSyncRepository.FindOnePending(ctx)
-			if err != nil {
-				if !errors.Is(err, sql.ErrNoRows) {
-					log.Errorf("error finding pending org to sync: %v", err)
-				}
-			}
-
-			if orgSync.ID != 0 {
-				log.Infof("syncing org: %d", orgSync.OrganizationID)
-				org, err := so.orgRepository.FindGitOrgById(ctx, orgSync.OrganizationID)
-				if err != nil {
-					log.Errorf("error fetching org by id: %v", err)
-					return err
-				}
-				if org.InstallationID == nil {
-					so.SyncInstallationIdByOrgId(ctx, org.ID)
-				}
-
-				so.SyncOrganizationRepositories(ctx, org.ID)
-
-				log.Infof("updating sync status for org: %d", org.ID)
-				_, err = so.orgSyncRepository.UpdateSyncStatus(ctx, org.ID)
-				if err != nil {
-					log.Errorf("error updating sync status for user: %v", err)
-				}
-				log.Infof("successfully synced organization ID: %d", org.ID)
-			}
-			return nil
-		})
+		// The claim is a single atomic statement, so no transaction is held across the
+		// GitHub calls below.
+		orgSync, err := so.orgSyncRepository.ClaimOnePending(ctx)
 		if err != nil {
-			log.Errorf("error handling sync transaction: %v", err)
+			if !errors.Is(err, sql.ErrNoRows) && !errors.Is(err, pgx.ErrNoRows) {
+				log.Errorf("error claiming pending org to sync: %v", err)
+			}
+		} else {
+			so.syncClaimedOrg(ctx, orgSync.OrganizationID)
 		}
+
 		select {
 		case <-ctx.Done():
 			log.Info("org sync loop shutting down...")
@@ -69,6 +48,28 @@ func (so SyncOrganization) StartSyncLoop(ctx context.Context) {
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+// syncClaimedOrg runs outside any transaction. A failure leaves the 5 minute backoff set by
+// the claim; success pushes next_sync out to its real schedule via UpdateSyncStatus.
+func (so SyncOrganization) syncClaimedOrg(ctx context.Context, orgId int64) {
+	log.Infof("syncing org: %d", orgId)
+	org, err := so.orgRepository.FindGitOrgById(ctx, orgId)
+	if err != nil {
+		log.Errorf("error fetching org by id: %v", err)
+		return
+	}
+	if org.InstallationID == nil {
+		so.SyncInstallationIdByOrgId(ctx, org.ID)
+	}
+
+	so.SyncOrganizationRepositories(ctx, org.ID)
+
+	log.Infof("updating sync status for org: %d", org.ID)
+	if _, err = so.orgSyncRepository.UpdateSyncStatus(ctx, org.ID); err != nil {
+		log.Errorf("error updating sync status for org: %v", err)
+	}
+	log.Infof("successfully synced organization ID: %d", org.ID)
 }
 
 func (so SyncOrganization) SyncOrganizationRepositories(ctx context.Context, orgId int64) {

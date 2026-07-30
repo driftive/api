@@ -13,6 +13,19 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countDriftAnalysisProjectsByRunId = `-- name: CountDriftAnalysisProjectsByRunId :one
+SELECT count(*)
+FROM drift_analysis_project
+WHERE drift_analysis_run_id = $1
+`
+
+func (q *Queries) CountDriftAnalysisProjectsByRunId(ctx context.Context, driftAnalysisRunID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countDriftAnalysisProjectsByRunId, driftAnalysisRunID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createDriftAnalysisProject = `-- name: CreateDriftAnalysisProject :one
 INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr, resources_added, resources_changed, resources_destroyed)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -121,6 +134,17 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 		&i.IdempotencyKey,
 	)
 	return i, err
+}
+
+const deleteDriftAnalysisRunsByRepositoryId = `-- name: DeleteDriftAnalysisRunsByRepositoryId :exec
+DELETE FROM drift_analysis_run
+WHERE repository_id = $1
+`
+
+// Projects are removed by the ON DELETE CASCADE on drift_analysis_project
+func (q *Queries) DeleteDriftAnalysisRunsByRepositoryId(ctx context.Context, repositoryID int64) error {
+	_, err := q.db.Exec(ctx, deleteDriftAnalysisRunsByRepositoryId, repositoryID)
+	return err
 }
 
 const deleteOldestRunsExceedingLimit = `-- name: DeleteOldestRunsExceedingLimit :exec

@@ -126,7 +126,7 @@ func main() {
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
 	organizationHandler := orgs.NewGitOrganizationHandler(*cfg, db_, orgRepo)
-	repositoryHandler := repos.NewGitRepositoryHandler(orgRepo, repoRepo, userRepo)
+	repositoryHandler := repos.NewGitRepositoryHandler(orgRepo, repoRepo, userRepo, driftRepo)
 	driftStateHandler := drift_stream.NewDriftStateHandler(cfg, orgRepo, repoRepo, driftRepo, cleanupService)
 	profileHandler := auth.NewProfileHandler(userRepo)
 
@@ -155,6 +155,7 @@ func main() {
 	v1.Get("/org/:org_id/repo", func(c fiber.Ctx) error { return repositoryHandler.GetRepoByOrgIdAndName(c) })
 	v1.Get("/repo/:repo_id/token", func(c fiber.Ctx) error { return repositoryHandler.GetRepoTokenById(c) })
 	v1.Post("/repo/:repo_id/token", func(c fiber.Ctx) error { return repositoryHandler.RegenerateToken(c) })
+	v1.Delete("/repo/:repo_id", func(c fiber.Ctx) error { return repositoryHandler.EraseRepositoryData(c) })
 	v1.Get("/repo/:repo_id/runs", func(c fiber.Ctx) error { return driftStateHandler.ListRunsByRepoId(c) })
 	v1.Get("/repo/:repo_id/stats", func(c fiber.Ctx) error { return driftStateHandler.GetRepositoryStats(c) })
 	v1.Get("/repo/:repo_id/trends", func(c fiber.Ctx) error { return driftStateHandler.GetRepositoryTrends(c) })

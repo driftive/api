@@ -12,6 +12,7 @@ type GitRepositoryRepository interface {
 	FindGitReposByOrgId(ctx context.Context, orgId int64) ([]queries.GitRepository, error)
 	FindGitRepositoryByOrgIdAndName(ctx context.Context, orgId int64, repoName string) (queries.GitRepository, error)
 	UpdateRepositoryToken(ctx context.Context, params queries.UpdateRepositoryTokenParams) (*string, error)
+	ClearRepositoryAnalysisToken(ctx context.Context, id int64) error
 	FindGitRepositoryByToken(ctx context.Context, token string) (queries.GitRepository, error)
 }
 
@@ -41,6 +42,10 @@ func (r *GitRepoRepo) FindGitRepositoryByOrgIdAndName(ctx context.Context, orgId
 
 func (r *GitRepoRepo) UpdateRepositoryToken(ctx context.Context, params queries.UpdateRepositoryTokenParams) (*string, error) {
 	return r.db.Queries(ctx).UpdateRepositoryToken(ctx, params)
+}
+
+func (r *GitRepoRepo) ClearRepositoryAnalysisToken(ctx context.Context, id int64) error {
+	return r.db.Queries(ctx).ClearRepositoryAnalysisToken(ctx, id)
 }
 
 func (r *GitRepoRepo) FindGitRepositoryByToken(ctx context.Context, token string) (queries.GitRepository, error) {

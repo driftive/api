@@ -9,7 +9,7 @@ import (
 type SyncStatusUserRepository interface {
 	WithTx(ctx context.Context, fn func(context.Context) error) error
 	CreateOrUpdateSyncStatusUser(ctx context.Context, userID int64) (queries.SyncStatusUser, error)
-	FindOnePendingSyncStatusUser(ctx context.Context) (queries.SyncStatusUser, error)
+	ClaimOnePendingSyncStatusUser(ctx context.Context) (queries.SyncStatusUser, error)
 	UpdateSyncStatusUserLastSyncedAt(ctx context.Context, syncStatusUserID int64) (queries.SyncStatusUser, error)
 	FindSyncStatusUserByUserID(ctx context.Context, userID int64) (queries.SyncStatusUser, error)
 }
@@ -22,8 +22,8 @@ func (s SyncStatusUserRepo) CreateOrUpdateSyncStatusUser(ctx context.Context, us
 	return s.db.Queries(ctx).CreateOrUpdateSyncStatusUser(ctx, userID)
 }
 
-func (s SyncStatusUserRepo) FindOnePendingSyncStatusUser(ctx context.Context) (queries.SyncStatusUser, error) {
-	return s.db.Queries(ctx).FindOnePendingSyncStatusUser(ctx)
+func (s SyncStatusUserRepo) ClaimOnePendingSyncStatusUser(ctx context.Context) (queries.SyncStatusUser, error) {
+	return s.db.Queries(ctx).ClaimOnePendingSyncStatusUser(ctx)
 }
 
 func (s SyncStatusUserRepo) UpdateSyncStatusUserLastSyncedAt(ctx context.Context, syncStatusUserID int64) (queries.SyncStatusUser, error) {

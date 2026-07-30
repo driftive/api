@@ -16,6 +16,7 @@ type DriftAnalysisRepository interface {
 	FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error)
 	FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (queries.DriftAnalysisRun, error)
 	FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error)
+	CountDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) (int64, error)
 	GetRepositoryRunStats(ctx context.Context, repoId int64) (queries.GetRepositoryRunStatsRow, error)
 	GetLatestRunForRepository(ctx context.Context, repoId int64) (queries.DriftAnalysisRun, error)
 
@@ -27,6 +28,7 @@ type DriftAnalysisRepository interface {
 
 	// Cleanup methods
 	DeleteOldestRunsExceedingLimit(ctx context.Context, repoId int64, maxRunsToKeep int32) error
+	DeleteDriftAnalysisRunsByRepositoryId(ctx context.Context, repoId int64) error
 
 	WithTx(ctx context.Context, txFunc func(context.Context) error) error
 }
@@ -71,6 +73,16 @@ func (r *DriftAnalysisRepo) FindRunByRepoAndIdempotencyKey(ctx context.Context, 
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) ([]queries.DriftAnalysisProject, error) {
 	return r.db.Queries(ctx).FindDriftAnalysisProjectsByRunId(ctx, runId)
+}
+
+func (r *DriftAnalysisRepo) CountDriftAnalysisProjectsByRunId(ctx context.Context, runId uuid.UUID) (int64, error) {
+	return r.db.Queries(ctx).CountDriftAnalysisProjectsByRunId(ctx, runId)
+}
+
+// DeleteDriftAnalysisRunsByRepositoryId removes every run for a repository. Project rows go
+// with them via the ON DELETE CASCADE on drift_analysis_project.
+func (r *DriftAnalysisRepo) DeleteDriftAnalysisRunsByRepositoryId(ctx context.Context, repoId int64) error {
+	return r.db.Queries(ctx).DeleteDriftAnalysisRunsByRepositoryId(ctx, repoId)
 }
 
 func (r *DriftAnalysisRepo) GetRepositoryRunStats(ctx context.Context, repoId int64) (queries.GetRepositoryRunStatsRow, error) {

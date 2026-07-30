@@ -29,6 +29,11 @@ SET analysis_token = @token
 WHERE id = @id
 RETURNING analysis_token;
 
+-- name: ClearRepositoryAnalysisToken :exec
+UPDATE git_repository
+SET analysis_token = NULL
+WHERE id = @id;
+
 -- name: FindGitRepositoryByToken :one
 SELECT *
 FROM git_repository
