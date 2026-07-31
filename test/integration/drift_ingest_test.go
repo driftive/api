@@ -53,12 +53,12 @@ func seedOrgAndRepo(t *testing.T) (repoID int64) {
 	return repoID
 }
 
-// newIngestApp builds a minimal Fiber app exposing just the drift ingest endpoint
+// newIngestApp builds a minimal Fiber app exposing the drift ingest and progress endpoints
 // against the shared testDB. Mirrors the public-route registration in main.go.
 func newIngestApp(t *testing.T) *fiber.App {
 	t.Helper()
 	repos := repository.NewRepository(testDB, &config.Config{})
-	cleanupSvc := cleanup.NewCleanupService(repos.DriftAnalysisRepository(), 400)
+	cleanupSvc := cleanup.NewCleanupService(repos.DriftAnalysisRepository(), 400, 15)
 	cfg := &config.Config{
 		Frontend: config.FrontendConfig{FrontendURL: "http://test.local"},
 	}
@@ -71,6 +71,7 @@ func newIngestApp(t *testing.T) *fiber.App {
 	)
 	app := fiber.New()
 	app.Post("/api/v1/drift_analysis", func(c fiber.Ctx) error { return handler.HandleUpdate(c) })
+	app.Post("/api/v1/drift_analysis/progress", func(c fiber.Ctx) error { return handler.HandleProgress(c) })
 	return app
 }
 
@@ -108,14 +109,14 @@ func sampleState() drift_stream.DriftDetectionResult {
 	}
 }
 
-func postIngest(t *testing.T, app *fiber.App, token, idemKey string, body any) (int, []byte) {
+func postJSON(t *testing.T, app *fiber.App, path, token, idemKey string, body any) (int, []byte) {
 	t.Helper()
 	buf, err := json.Marshal(body)
 	if err != nil {
 		t.Fatalf("marshal body: %v", err)
 	}
 	req := httptest.NewRequestWithContext(context.Background(),
-		http.MethodPost, "/api/v1/drift_analysis", bytes.NewReader(buf))
+		http.MethodPost, path, bytes.NewReader(buf))
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.Header.Set("X-Token", token)
@@ -130,6 +131,16 @@ func postIngest(t *testing.T, app *fiber.App, token, idemKey string, body any) (
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, respBody
+}
+
+func postIngest(t *testing.T, app *fiber.App, token, idemKey string, body any) (int, []byte) {
+	t.Helper()
+	return postJSON(t, app, "/api/v1/drift_analysis", token, idemKey, body)
+}
+
+func postProgress(t *testing.T, app *fiber.App, token, idemKey string, body any) (int, []byte) {
+	t.Helper()
+	return postJSON(t, app, "/api/v1/drift_analysis/progress", token, idemKey, body)
 }
 
 func TestDriftIngest_HappyPath(t *testing.T) {
@@ -169,6 +180,22 @@ func TestDriftIngest_HappyPath(t *testing.T) {
 	if runCount != 1 {
 		t.Errorf("expected 1 run, got %d", runCount)
 	}
+
+	// A run ingested without live progress reporting is COMPLETED on arrival.
+	var runStatus string
+	var runningProjects []string
+	if err := pool.QueryRow(ctx,
+		`SELECT status, running_projects FROM drift_analysis_run WHERE repository_id = $1`, repoID).
+		Scan(&runStatus, &runningProjects); err != nil {
+		t.Fatalf("query run status: %v", err)
+	}
+	if runStatus != "COMPLETED" {
+		t.Errorf("expected status COMPLETED, got %q", runStatus)
+	}
+	if len(runningProjects) != 0 {
+		t.Errorf("expected empty running_projects, got %v", runningProjects)
+	}
+
 	if err := pool.QueryRow(ctx,
 		`SELECT COUNT(*) FROM drift_analysis_project p
 		 JOIN drift_analysis_run r ON r.uuid = p.drift_analysis_run_id

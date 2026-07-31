@@ -1,7 +1,53 @@
 -- name: CreateDriftAnalysisRun :one
-INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key)
-VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @total_projects_errored, @total_projects_skipped, @analysis_duration_millis, @idempotency_key)
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key, status)
+VALUES (@uuid, @repository_id, @total_projects, @total_projects_drifted, @total_projects_errored, @total_projects_skipped, @analysis_duration_millis, @idempotency_key, 'COMPLETED')
 RETURNING *;
+
+-- name: CreateRunningDriftAnalysisRun :one
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key, status, running_projects)
+VALUES (@uuid, @repository_id, @total_projects, 0, 0, 0, 0, @idempotency_key, 'RUNNING', @running_projects)
+RETURNING *;
+
+-- name: UpdateDriftAnalysisRunProgress :exec
+-- Counters are recomputed from the project rows rather than incremented, so a dropped progress
+-- tick self-heals. The status guard makes a tick that races the finalize a no-op.
+UPDATE drift_analysis_run r
+SET running_projects       = @running_projects,
+    total_projects         = @total_projects,
+    total_projects_drifted = c.drifted::INT,
+    total_projects_errored = c.errored::INT,
+    total_projects_skipped = c.skipped::INT,
+    updated_at             = NOW()
+FROM (SELECT COUNT(*) FILTER (WHERE drifted AND succeeded AND NOT skipped_due_to_pr) AS drifted,
+             COUNT(*) FILTER (WHERE NOT succeeded)                                   AS errored,
+             COUNT(*) FILTER (WHERE skipped_due_to_pr)                               AS skipped
+      FROM drift_analysis_project
+      WHERE drift_analysis_run_id = @uuid) c
+WHERE r.uuid = @uuid AND r.status = 'RUNNING';
+
+-- name: MarkDriftAnalysisRunCompleted :exec
+UPDATE drift_analysis_run
+SET total_projects           = @total_projects,
+    total_projects_drifted   = @total_projects_drifted,
+    total_projects_errored   = @total_projects_errored,
+    total_projects_skipped   = @total_projects_skipped,
+    analysis_duration_millis = @analysis_duration_millis,
+    status                   = 'COMPLETED',
+    running_projects         = '{}',
+    updated_at               = NOW()
+WHERE uuid = @uuid;
+
+-- name: DeleteStaleRunningRuns :execrows
+-- Collects runs abandoned by a crashed CLI. FOR UPDATE SKIP LOCKED keeps concurrent sweepers on
+-- other API instances from blocking or double-deleting, and skips a run whose progress update is
+-- in flight. Project rows go via ON DELETE CASCADE.
+DELETE FROM drift_analysis_run
+WHERE uuid IN (SELECT r.uuid
+               FROM drift_analysis_run r
+               WHERE r.status = 'RUNNING'
+                 AND r.updated_at < NOW() - (sqlc.arg(stale_minutes)::INTEGER || ' minutes')::INTERVAL
+               FOR UPDATE SKIP LOCKED
+               LIMIT sqlc.arg(max_rows));
 
 -- name: FindDriftAnalysisRunByRepoAndIdempotencyKey :one
 SELECT *
@@ -13,9 +59,21 @@ INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, s
 VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr, @resources_added, @resources_changed, @resources_destroyed)
 RETURNING *;
 
--- name: CreateDriftAnalysisProjectsBatch :copyfrom
+-- name: UpsertDriftAnalysisProject :batchexec
+-- Shared write path for the progress ticks and the terminal ingest. Keyed on the unique index
+-- (drift_analysis_run_id, dir), so re-sending a project updates it in place instead of duplicating.
 INSERT INTO drift_analysis_project (drift_analysis_run_id, dir, type, drifted, succeeded, init_output, plan_output, skipped_due_to_pr, resources_added, resources_changed, resources_destroyed)
-VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr, @resources_added, @resources_changed, @resources_destroyed);
+VALUES (@drift_analysis_run_id, @dir, @type, @drifted, @succeeded, @init_output, @plan_output, @skipped_due_to_pr, @resources_added, @resources_changed, @resources_destroyed)
+ON CONFLICT (drift_analysis_run_id, dir) DO UPDATE
+SET type                = EXCLUDED.type,
+    drifted             = EXCLUDED.drifted,
+    succeeded           = EXCLUDED.succeeded,
+    init_output         = EXCLUDED.init_output,
+    plan_output         = EXCLUDED.plan_output,
+    skipped_due_to_pr   = EXCLUDED.skipped_due_to_pr,
+    resources_added     = EXCLUDED.resources_added,
+    resources_changed   = EXCLUDED.resources_changed,
+    resources_destroyed = EXCLUDED.resources_destroyed;
 
 -- name: FindDriftAnalysisRunsByRepositoryId :many
 SELECT *
@@ -54,6 +112,7 @@ WHERE repository_id = @repository_id;
 SELECT *
 FROM drift_analysis_run
 WHERE repository_id = @repository_id
+  AND status = 'COMPLETED'
 ORDER BY created_at DESC
 LIMIT 1;
 
@@ -65,6 +124,7 @@ SELECT
     COUNT(*) FILTER (WHERE total_projects_drifted > 0)::BIGINT AS runs_with_drift
 FROM drift_analysis_run
 WHERE repository_id = @repository_id
+  AND status = 'COMPLETED'
   AND created_at >= NOW() - (sqlc.arg(days_back)::INTEGER || ' days')::INTERVAL
 GROUP BY DATE(created_at)
 ORDER BY DATE(created_at) ASC;
@@ -79,6 +139,7 @@ SELECT
 FROM drift_analysis_project dap
 JOIN drift_analysis_run dar ON dap.drift_analysis_run_id = dar.uuid
 WHERE dar.repository_id = @repository_id
+  AND dar.status = 'COMPLETED'
   AND dar.created_at >= NOW() - (sqlc.arg(days_back)::INTEGER || ' days')::INTERVAL
 GROUP BY dap.dir, dap.type
 HAVING COUNT(*) FILTER (WHERE dap.drifted = true) > 0
@@ -95,6 +156,7 @@ WITH ranked_runs AS (
         ROW_NUMBER() OVER (ORDER BY created_at DESC) AS rn
     FROM drift_analysis_run
     WHERE repository_id = @repository_id
+      AND status = 'COMPLETED'
 ),
 first_drift AS (
     SELECT MIN(rn) AS break_point
@@ -119,6 +181,7 @@ WITH project_states AS (
     FROM drift_analysis_project dap
     JOIN drift_analysis_run dar ON dap.drift_analysis_run_id = dar.uuid
     WHERE dar.repository_id = @repository_id
+      AND dar.status = 'COMPLETED'
 ),
 -- Mark transitions: drift_start when going from not-drifted to drifted, drift_end when going from drifted to not-drifted
 transitions AS (

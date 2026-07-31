@@ -121,7 +121,14 @@ func main() {
 			maxRunsPerRepo = int32(parsed)
 		}
 	}
-	cleanupService := cleanup.NewCleanupService(driftRepo, maxRunsPerRepo)
+	// A non-positive value is ignored so a misconfiguration cannot delete live runs.
+	staleRunMinutes := int32(15)
+	if envStaleMinutes := utils.GetEnvOrDefault("STALE_RUN_MINUTES", ""); envStaleMinutes != "" {
+		if parsed, err := strconv.Atoi(envStaleMinutes); err == nil && parsed > 0 {
+			staleRunMinutes = int32(parsed)
+		}
+	}
+	cleanupService := cleanup.NewCleanupService(driftRepo, maxRunsPerRepo, staleRunMinutes)
 
 	// handlers
 	ghOAuthHandler := github.NewOAuthHandler(*cfg, db_, userRepo, syncStatusUserRepo)
@@ -141,6 +148,7 @@ func main() {
 		return ghOAuthHandler.Callback(c)
 	})
 	v1.Post("/drift_analysis", func(c fiber.Ctx) error { return driftStateHandler.HandleUpdate(c) })
+	v1.Post("/drift_analysis/progress", func(c fiber.Ctx) error { return driftStateHandler.HandleProgress(c) })
 	v1.Get("/orgs/gh_installed", func(c fiber.Ctx) error { return organizationHandler.HandleGHOrganizationInstalled(c) })
 
 	app.Use(jwtware.New(jwtware.Config{
@@ -176,6 +184,7 @@ func main() {
 	go observability.SuperviseLoop(ctx, "gh_token_refresher", ghTokenRefresher.RefreshTokens)
 	go observability.SuperviseLoop(ctx, "user_sync", userSync.StartSyncLoop)
 	go observability.SuperviseLoop(ctx, "org_sync", orgSync.StartSyncLoop)
+	go observability.SuperviseLoop(ctx, "stale_run_sweeper", cleanupService.StartStaleRunSweeper)
 
 	// Handle shutdown signals
 	go func() {
