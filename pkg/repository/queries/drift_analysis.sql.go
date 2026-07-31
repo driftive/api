@@ -78,24 +78,10 @@ func (q *Queries) CreateDriftAnalysisProject(ctx context.Context, arg CreateDrif
 	return i, err
 }
 
-type CreateDriftAnalysisProjectsBatchParams struct {
-	DriftAnalysisRunID uuid.UUID
-	Dir                string
-	Type               string
-	Drifted            bool
-	Succeeded          bool
-	InitOutput         *string
-	PlanOutput         *string
-	SkippedDueToPr     bool
-	ResourcesAdded     *int32
-	ResourcesChanged   *int32
-	ResourcesDestroyed *int32
-}
-
 const createDriftAnalysisRun = `-- name: CreateDriftAnalysisRun :one
-INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key, status)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'COMPLETED')
+RETURNING uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key, status, running_projects
 `
 
 type CreateDriftAnalysisRunParams struct {
@@ -132,6 +118,48 @@ func (q *Queries) CreateDriftAnalysisRun(ctx context.Context, arg CreateDriftAna
 		&i.TotalProjectsErrored,
 		&i.TotalProjectsSkipped,
 		&i.IdempotencyKey,
+		&i.Status,
+		&i.RunningProjects,
+	)
+	return i, err
+}
+
+const createRunningDriftAnalysisRun = `-- name: CreateRunningDriftAnalysisRun :one
+INSERT INTO drift_analysis_run (uuid, repository_id, total_projects, total_projects_drifted, total_projects_errored, total_projects_skipped, analysis_duration_millis, idempotency_key, status, running_projects)
+VALUES ($1, $2, $3, 0, 0, 0, 0, $4, 'RUNNING', $5)
+RETURNING uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key, status, running_projects
+`
+
+type CreateRunningDriftAnalysisRunParams struct {
+	Uuid            uuid.UUID
+	RepositoryID    int64
+	TotalProjects   int32
+	IdempotencyKey  *string
+	RunningProjects []string
+}
+
+func (q *Queries) CreateRunningDriftAnalysisRun(ctx context.Context, arg CreateRunningDriftAnalysisRunParams) (DriftAnalysisRun, error) {
+	row := q.db.QueryRow(ctx, createRunningDriftAnalysisRun,
+		arg.Uuid,
+		arg.RepositoryID,
+		arg.TotalProjects,
+		arg.IdempotencyKey,
+		arg.RunningProjects,
+	)
+	var i DriftAnalysisRun
+	err := row.Scan(
+		&i.Uuid,
+		&i.RepositoryID,
+		&i.TotalProjects,
+		&i.TotalProjectsDrifted,
+		&i.AnalysisDurationMillis,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.TotalProjectsErrored,
+		&i.TotalProjectsSkipped,
+		&i.IdempotencyKey,
+		&i.Status,
+		&i.RunningProjects,
 	)
 	return i, err
 }
@@ -166,6 +194,32 @@ type DeleteOldestRunsExceedingLimitParams struct {
 func (q *Queries) DeleteOldestRunsExceedingLimit(ctx context.Context, arg DeleteOldestRunsExceedingLimitParams) error {
 	_, err := q.db.Exec(ctx, deleteOldestRunsExceedingLimit, arg.RepositoryID, arg.MaxRunsToKeep)
 	return err
+}
+
+const deleteStaleRunningRuns = `-- name: DeleteStaleRunningRuns :execrows
+DELETE FROM drift_analysis_run
+WHERE uuid IN (SELECT r.uuid
+               FROM drift_analysis_run r
+               WHERE r.status = 'RUNNING'
+                 AND r.updated_at < NOW() - ($1::INTEGER || ' minutes')::INTERVAL
+               FOR UPDATE SKIP LOCKED
+               LIMIT $2)
+`
+
+type DeleteStaleRunningRunsParams struct {
+	StaleMinutes int32
+	MaxRows      int32
+}
+
+// Collects runs abandoned by a crashed CLI. FOR UPDATE SKIP LOCKED keeps concurrent sweepers on
+// other API instances from blocking or double-deleting, and skips a run whose progress update is
+// in flight. Project rows go via ON DELETE CASCADE.
+func (q *Queries) DeleteStaleRunningRuns(ctx context.Context, arg DeleteStaleRunningRunsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleRunningRuns, arg.StaleMinutes, arg.MaxRows)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const findDriftAnalysisProjectsByRunId = `-- name: FindDriftAnalysisProjectsByRunId :many
@@ -216,7 +270,7 @@ func (q *Queries) FindDriftAnalysisProjectsByRunId(ctx context.Context, driftAna
 }
 
 const findDriftAnalysisRunByRepoAndIdempotencyKey = `-- name: FindDriftAnalysisRunByRepoAndIdempotencyKey :one
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key, status, running_projects
 FROM drift_analysis_run
 WHERE repository_id = $1 AND idempotency_key = $2
 `
@@ -240,12 +294,14 @@ func (q *Queries) FindDriftAnalysisRunByRepoAndIdempotencyKey(ctx context.Contex
 		&i.TotalProjectsErrored,
 		&i.TotalProjectsSkipped,
 		&i.IdempotencyKey,
+		&i.Status,
+		&i.RunningProjects,
 	)
 	return i, err
 }
 
 const findDriftAnalysisRunByUUID = `-- name: FindDriftAnalysisRunByUUID :one
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key, status, running_projects
 FROM drift_analysis_run
 WHERE uuid = $1
 `
@@ -264,12 +320,14 @@ func (q *Queries) FindDriftAnalysisRunByUUID(ctx context.Context, argUuid uuid.U
 		&i.TotalProjectsErrored,
 		&i.TotalProjectsSkipped,
 		&i.IdempotencyKey,
+		&i.Status,
+		&i.RunningProjects,
 	)
 	return i, err
 }
 
 const findDriftAnalysisRunsByRepositoryId = `-- name: FindDriftAnalysisRunsByRepositoryId :many
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key, status, running_projects
 FROM drift_analysis_run
 WHERE repository_id = $1
 ORDER BY created_at DESC
@@ -302,6 +360,8 @@ func (q *Queries) FindDriftAnalysisRunsByRepositoryId(ctx context.Context, arg F
 			&i.TotalProjectsErrored,
 			&i.TotalProjectsSkipped,
 			&i.IdempotencyKey,
+			&i.Status,
+			&i.RunningProjects,
 		); err != nil {
 			return nil, err
 		}
@@ -322,6 +382,7 @@ WITH ranked_runs AS (
         ROW_NUMBER() OVER (ORDER BY created_at DESC) AS rn
     FROM drift_analysis_run
     WHERE repository_id = $1
+      AND status = 'COMPLETED'
 ),
 first_drift AS (
     SELECT MIN(rn) AS break_point
@@ -356,6 +417,7 @@ SELECT
     COUNT(*) FILTER (WHERE total_projects_drifted > 0)::BIGINT AS runs_with_drift
 FROM drift_analysis_run
 WHERE repository_id = $1
+  AND status = 'COMPLETED'
   AND created_at >= NOW() - ($2::INTEGER || ' days')::INTERVAL
 GROUP BY DATE(created_at)
 ORDER BY DATE(created_at) ASC
@@ -394,9 +456,10 @@ func (q *Queries) GetDriftRateOverTime(ctx context.Context, arg GetDriftRateOver
 }
 
 const getLatestRunForRepository = `-- name: GetLatestRunForRepository :one
-SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key
+SELECT uuid, repository_id, total_projects, total_projects_drifted, analysis_duration_millis, created_at, updated_at, total_projects_errored, total_projects_skipped, idempotency_key, status, running_projects
 FROM drift_analysis_run
 WHERE repository_id = $1
+  AND status = 'COMPLETED'
 ORDER BY created_at DESC
 LIMIT 1
 `
@@ -415,6 +478,8 @@ func (q *Queries) GetLatestRunForRepository(ctx context.Context, repositoryID in
 		&i.TotalProjectsErrored,
 		&i.TotalProjectsSkipped,
 		&i.IdempotencyKey,
+		&i.Status,
+		&i.RunningProjects,
 	)
 	return i, err
 }
@@ -429,6 +494,7 @@ WITH project_states AS (
     FROM drift_analysis_project dap
     JOIN drift_analysis_run dar ON dap.drift_analysis_run_id = dar.uuid
     WHERE dar.repository_id = $1
+      AND dar.status = 'COMPLETED'
 ),
 transitions AS (
     SELECT
@@ -513,6 +579,7 @@ SELECT
 FROM drift_analysis_project dap
 JOIN drift_analysis_run dar ON dap.drift_analysis_run_id = dar.uuid
 WHERE dar.repository_id = $1
+  AND dar.status = 'COMPLETED'
   AND dar.created_at >= NOW() - ($2::INTEGER || ' days')::INTERVAL
 GROUP BY dap.dir, dap.type
 HAVING COUNT(*) FILTER (WHERE dap.drifted = true) > 0
@@ -579,4 +646,67 @@ func (q *Queries) GetRepositoryRunStats(ctx context.Context, repositoryID int64)
 	var i GetRepositoryRunStatsRow
 	err := row.Scan(&i.TotalRuns, &i.RunsWithDrift, &i.LastRunAt)
 	return i, err
+}
+
+const markDriftAnalysisRunCompleted = `-- name: MarkDriftAnalysisRunCompleted :exec
+UPDATE drift_analysis_run
+SET total_projects           = $1,
+    total_projects_drifted   = $2,
+    total_projects_errored   = $3,
+    total_projects_skipped   = $4,
+    analysis_duration_millis = $5,
+    status                   = 'COMPLETED',
+    running_projects         = '{}',
+    updated_at               = NOW()
+WHERE uuid = $6
+`
+
+type MarkDriftAnalysisRunCompletedParams struct {
+	TotalProjects          int32
+	TotalProjectsDrifted   int32
+	TotalProjectsErrored   int32
+	TotalProjectsSkipped   int32
+	AnalysisDurationMillis int64
+	Uuid                   uuid.UUID
+}
+
+func (q *Queries) MarkDriftAnalysisRunCompleted(ctx context.Context, arg MarkDriftAnalysisRunCompletedParams) error {
+	_, err := q.db.Exec(ctx, markDriftAnalysisRunCompleted,
+		arg.TotalProjects,
+		arg.TotalProjectsDrifted,
+		arg.TotalProjectsErrored,
+		arg.TotalProjectsSkipped,
+		arg.AnalysisDurationMillis,
+		arg.Uuid,
+	)
+	return err
+}
+
+const updateDriftAnalysisRunProgress = `-- name: UpdateDriftAnalysisRunProgress :exec
+UPDATE drift_analysis_run r
+SET running_projects       = $1,
+    total_projects         = $2,
+    total_projects_drifted = c.drifted::INT,
+    total_projects_errored = c.errored::INT,
+    total_projects_skipped = c.skipped::INT,
+    updated_at             = NOW()
+FROM (SELECT COUNT(*) FILTER (WHERE drifted AND succeeded AND NOT skipped_due_to_pr) AS drifted,
+             COUNT(*) FILTER (WHERE NOT succeeded)                                   AS errored,
+             COUNT(*) FILTER (WHERE skipped_due_to_pr)                               AS skipped
+      FROM drift_analysis_project
+      WHERE drift_analysis_run_id = $3) c
+WHERE r.uuid = $3 AND r.status = 'RUNNING'
+`
+
+type UpdateDriftAnalysisRunProgressParams struct {
+	RunningProjects []string
+	TotalProjects   int32
+	Uuid            uuid.UUID
+}
+
+// Counters are recomputed from the project rows rather than incremented, so a dropped progress
+// tick self-heals. The status guard makes a tick that races the finalize a no-op.
+func (q *Queries) UpdateDriftAnalysisRunProgress(ctx context.Context, arg UpdateDriftAnalysisRunProgressParams) error {
+	_, err := q.db.Exec(ctx, updateDriftAnalysisRunProgress, arg.RunningProjects, arg.TotalProjects, arg.Uuid)
+	return err
 }

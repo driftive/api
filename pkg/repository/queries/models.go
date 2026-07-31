@@ -36,6 +36,8 @@ type DriftAnalysisRun struct {
 	TotalProjectsErrored   int32
 	TotalProjectsSkipped   int32
 	IdempotencyKey         *string
+	Status                 string
+	RunningProjects        []string
 }
 
 type GitOrganization struct {

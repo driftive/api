@@ -10,6 +10,7 @@ type DriftAnalysisRunDTO struct {
 	TotalProjectsErrored int32     `json:"total_projects_errored"`
 	TotalProjectsSkipped int32     `json:"total_projects_skipped"`
 	DurationMillis       int64     `json:"duration_millis"`
+	Status               string    `json:"status"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
@@ -31,7 +32,8 @@ type DriftAnalysisProjectDTO struct {
 
 type DriftAnalysisRunWithProjectsDTO struct {
 	DriftAnalysisRunDTO
-	Projects []DriftAnalysisProjectDTO `json:"projects"`
+	RunningProjects []string                  `json:"running_projects"`
+	Projects        []DriftAnalysisProjectDTO `json:"projects"`
 }
 
 type RepositoryRunStatsDTO struct {

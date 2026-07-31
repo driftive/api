@@ -24,6 +24,11 @@ import (
 // pgUniqueViolation is the SQLSTATE code for unique_violation.
 const pgUniqueViolation = "23505"
 
+const (
+	runStatusRunning   = "RUNNING"
+	runStatusCompleted = "COMPLETED"
+)
+
 type DriftStateHandler struct {
 	cfg                     *config.Config
 	orgRepository           repository.GitOrgRepository
@@ -75,38 +80,75 @@ func projectTypeToDBString(projectType ProjectType) (string, error) {
 	}
 }
 
-func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
-	log.Info("Handling drift state update")
+// resolveRepoAndOrg maps the X-Token header to its repository and organization. When ok is false
+// the returned int is the HTTP status the caller should send.
+func (d *DriftStateHandler) resolveRepoAndOrg(c fiber.Ctx) (queries.GitRepository, queries.GitOrganization, int, bool) {
 	headers := c.GetReqHeaders()
 	tokenArr := headers["X-Token"]
 
 	// token is a string[] so we need to check if it's empty
 	if len(tokenArr) == 0 {
-		return c.SendStatus(fiber.StatusUnauthorized)
+		return queries.GitRepository{}, queries.GitOrganization{}, fiber.StatusUnauthorized, false
 	}
 
-	token := tokenArr[0]
-
-	repo, err := d.repoRepository.FindGitRepositoryByToken(c.Context(), token)
+	repo, err := d.repoRepository.FindGitRepositoryByToken(c.Context(), tokenArr[0])
 	if err != nil {
 		log.Errorf("Error finding repository by token: %v", err)
-		return c.SendStatus(fiber.StatusUnauthorized)
+		return queries.GitRepository{}, queries.GitOrganization{}, fiber.StatusUnauthorized, false
 	}
-	log.Infof("Handling drift state update for repository: %s", repo.Name)
 
 	// Fetch organization to build dashboard URL
 	org, err := d.orgRepository.FindGitOrgById(c.Context(), repo.OrganizationID)
 	if err != nil {
 		log.Errorf("Error finding organization by ID: %v", err)
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return queries.GitRepository{}, queries.GitOrganization{}, fiber.StatusInternalServerError, false
 	}
+
+	return repo, org, fiber.StatusOK, true
+}
+
+// toUpsertParams validates every project type and parses each plan summary up front, so the
+// caller can reject a bad payload before opening a transaction.
+func toUpsertParams(runID uuid.UUID, results []DriftProjectResult) ([]queries.UpsertDriftAnalysisProjectParams, error) {
+	params := make([]queries.UpsertDriftAnalysisProjectParams, len(results))
+	for i, project := range results {
+		projectType, err := projectTypeToDBString(project.Project.Type)
+		if err != nil {
+			return nil, fmt.Errorf("project %d (%s): %w", i, project.Project.Dir, err)
+		}
+		added, changed, destroyed := ParsePlanSummary(project.PlanOutput)
+		params[i] = queries.UpsertDriftAnalysisProjectParams{
+			DriftAnalysisRunID: runID,
+			Dir:                project.Project.Dir,
+			Type:               projectType,
+			Drifted:            project.Drifted,
+			Succeeded:          project.Succeeded,
+			InitOutput:         &project.InitOutput,
+			PlanOutput:         &project.PlanOutput,
+			SkippedDueToPr:     project.SkippedDueToPR,
+			ResourcesAdded:     added,
+			ResourcesChanged:   changed,
+			ResourcesDestroyed: destroyed,
+		}
+	}
+	return params, nil
+}
+
+func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
+	log.Info("Handling drift state update")
+
+	repo, org, status, ok := d.resolveRepoAndOrg(c)
+	if !ok {
+		return c.SendStatus(status)
+	}
+	log.Infof("Handling drift state update for repository: %s", repo.Name)
 
 	idemKey := strings.TrimSpace(c.Get("Idempotency-Key"))
 
-	// If the client sent an Idempotency-Key and we already have a run for it that holds
+	// If the client sent an Idempotency-Key and we already have a completed run for it that holds
 	// results, return that run without re-inserting. This lets the CLI safely retry transient
-	// failures. A run with no project rows is adopted instead of replayed, so the results are
-	// still written rather than swallowed.
+	// failures. A run that is still RUNNING (live progress reporting) or holds no project rows is
+	// adopted instead of replayed, so the results are still written rather than swallowed.
 	var adoptedRunUUID *uuid.UUID
 	if idemKey != "" {
 		existing, err := d.driftAnalysisRepository.FindRunByRepoAndIdempotencyKey(c.Context(), repo.ID, idemKey)
@@ -117,11 +159,11 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 				log.Errorf("Error counting projects for run %s: %v", existing.Uuid, countErr)
 				return c.SendStatus(fiber.StatusInternalServerError)
 			}
-			if projectCount > 0 {
+			if existing.Status == runStatusCompleted && projectCount > 0 {
 				log.Infof("Idempotent replay for repository %d, key %s -> run %s", repo.ID, idemKey, existing.Uuid)
 				return c.JSON(buildAnalysisResponse(d.cfg.Frontend.FrontendURL, org, repo, existing.Uuid))
 			}
-			log.Infof("Adopting empty run %s for repository %d, key %s", existing.Uuid, repo.ID, idemKey)
+			log.Infof("Adopting %s run %s for repository %d, key %s", existing.Status, existing.Uuid, repo.ID, idemKey)
 			adoptedRunUUID = &existing.Uuid
 		case !errors.Is(err, pgx.ErrNoRows):
 			log.Errorf("Error looking up run by idempotency key: %v", err)
@@ -153,25 +195,36 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 		idemKeyPtr = &idemKey
 	}
 
-	// Pre-validate all project types before opening a transaction.
-	// (returning c.SendStatus from inside the closure would commit the partial tx).
-	projectTypes := make([]string, len(state.ProjectResults))
-	for i, project := range state.ProjectResults {
-		projectType, err := projectTypeToDBString(project.Project.Type)
-		if err != nil {
-			log.Errorf("Invalid project type %v at index %d: %v", project.Project.Type, i, err)
-			return c.SendStatus(fiber.StatusBadRequest)
-		}
-		projectTypes[i] = projectType
+	// The run uuid and the project params are resolved before opening the transaction, because
+	// returning c.SendStatus from inside the closure would commit the partial tx.
+	runUUID := uuid.New()
+	if adoptedRunUUID != nil {
+		runUUID = *adoptedRunUUID
 	}
 
-	var runUUID uuid.UUID
+	upsertParams, err := toUpsertParams(runUUID, state.ProjectResults)
+	if err != nil {
+		log.Errorf("Rejecting drift state update: %v", err)
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
 	err = d.driftAnalysisRepository.WithTx(c.Context(), func(ctx context.Context) error {
 		if adoptedRunUUID != nil {
-			runUUID = *adoptedRunUUID
+			completion := queries.MarkDriftAnalysisRunCompletedParams{
+				Uuid:                   runUUID,
+				TotalProjects:          state.TotalProjects,
+				TotalProjectsDrifted:   state.TotalDrifted,
+				TotalProjectsErrored:   totalErrored,
+				TotalProjectsSkipped:   state.TotalSkipped,
+				AnalysisDurationMillis: state.Duration.Milliseconds(),
+			}
+			if err := d.driftAnalysisRepository.MarkDriftAnalysisRunCompleted(ctx, completion); err != nil {
+				log.Errorf("Error completing drift analysis run %s: %v", runUUID, err)
+				return err
+			}
 		} else {
 			params := queries.CreateDriftAnalysisRunParams{
-				Uuid:                   uuid.New(),
+				Uuid:                   runUUID,
 				RepositoryID:           repo.ID,
 				TotalProjects:          state.TotalProjects,
 				TotalProjectsDrifted:   state.TotalDrifted,
@@ -186,34 +239,15 @@ func (d *DriftStateHandler) HandleUpdate(c fiber.Ctx) error {
 				log.Errorf("Error creating drift analysis run: %v", err)
 				return err
 			}
-			runUUID = run.Uuid
 			log.Info("Created drift analysis run: ", run.Uuid)
 		}
 
-		if len(state.ProjectResults) > 0 {
-			batch := make([]queries.CreateDriftAnalysisProjectsBatchParams, len(state.ProjectResults))
-			for i, project := range state.ProjectResults {
-				added, changed, destroyed := ParsePlanSummary(project.PlanOutput)
-				batch[i] = queries.CreateDriftAnalysisProjectsBatchParams{
-					DriftAnalysisRunID: runUUID,
-					Dir:                project.Project.Dir,
-					Type:               projectTypes[i],
-					Drifted:            project.Drifted,
-					Succeeded:          project.Succeeded,
-					InitOutput:         &project.InitOutput,
-					PlanOutput:         &project.PlanOutput,
-					SkippedDueToPr:     project.SkippedDueToPR,
-					ResourcesAdded:     added,
-					ResourcesChanged:   changed,
-					ResourcesDestroyed: destroyed,
-				}
-			}
-			inserted, err := d.driftAnalysisRepository.CreateDriftAnalysisProjectsBatch(ctx, batch)
-			if err != nil {
-				log.Errorf("Error batch-inserting drift analysis projects: %v", err)
+		if len(upsertParams) > 0 {
+			if err := d.driftAnalysisRepository.UpsertDriftAnalysisProjects(ctx, upsertParams); err != nil {
+				log.Errorf("Error upserting drift analysis projects: %v", err)
 				return err
 			}
-			log.Debugf("Batch-inserted %d drift analysis projects for run %s", inserted, runUUID)
+			log.Debugf("Upserted %d drift analysis projects for run %s", len(upsertParams), runUUID)
 		}
 
 		return nil

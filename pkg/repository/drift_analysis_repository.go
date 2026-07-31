@@ -10,8 +10,11 @@ import (
 
 type DriftAnalysisRepository interface {
 	CreateDriftAnalysisRun(ctx context.Context, params queries.CreateDriftAnalysisRunParams) (queries.DriftAnalysisRun, error)
+	CreateRunningDriftAnalysisRun(ctx context.Context, params queries.CreateRunningDriftAnalysisRunParams) (queries.DriftAnalysisRun, error)
 	CreateDriftAnalysisProject(ctx context.Context, params queries.CreateDriftAnalysisProjectParams) (queries.DriftAnalysisProject, error)
-	CreateDriftAnalysisProjectsBatch(ctx context.Context, rows []queries.CreateDriftAnalysisProjectsBatchParams) (int64, error)
+	UpsertDriftAnalysisProjects(ctx context.Context, rows []queries.UpsertDriftAnalysisProjectParams) error
+	UpdateDriftAnalysisRunProgress(ctx context.Context, params queries.UpdateDriftAnalysisRunProgressParams) error
+	MarkDriftAnalysisRunCompleted(ctx context.Context, params queries.MarkDriftAnalysisRunCompletedParams) error
 	FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error)
 	FindDriftAnalysisRunByUUID(ctx context.Context, uuid uuid.UUID) (queries.DriftAnalysisRun, error)
 	FindRunByRepoAndIdempotencyKey(ctx context.Context, repoId int64, idempotencyKey string) (queries.DriftAnalysisRun, error)
@@ -29,6 +32,7 @@ type DriftAnalysisRepository interface {
 	// Cleanup methods
 	DeleteOldestRunsExceedingLimit(ctx context.Context, repoId int64, maxRunsToKeep int32) error
 	DeleteDriftAnalysisRunsByRepositoryId(ctx context.Context, repoId int64) error
+	DeleteStaleRunningRuns(ctx context.Context, staleMinutes int32, maxRows int32) (int64, error)
 
 	WithTx(ctx context.Context, txFunc func(context.Context) error) error
 }
@@ -41,12 +45,36 @@ func (r *DriftAnalysisRepo) CreateDriftAnalysisRun(ctx context.Context, params q
 	return r.db.Queries(ctx).CreateDriftAnalysisRun(ctx, params)
 }
 
+func (r *DriftAnalysisRepo) CreateRunningDriftAnalysisRun(ctx context.Context, params queries.CreateRunningDriftAnalysisRunParams) (queries.DriftAnalysisRun, error) {
+	return r.db.Queries(ctx).CreateRunningDriftAnalysisRun(ctx, params)
+}
+
 func (r *DriftAnalysisRepo) CreateDriftAnalysisProject(ctx context.Context, params queries.CreateDriftAnalysisProjectParams) (queries.DriftAnalysisProject, error) {
 	return r.db.Queries(ctx).CreateDriftAnalysisProject(ctx, params)
 }
 
-func (r *DriftAnalysisRepo) CreateDriftAnalysisProjectsBatch(ctx context.Context, rows []queries.CreateDriftAnalysisProjectsBatchParams) (int64, error) {
-	return r.db.Queries(ctx).CreateDriftAnalysisProjectsBatch(ctx, rows)
+// UpsertDriftAnalysisProjects returns the first statement error in the batch, so a single failing
+// row fails the whole call and rolls back the surrounding transaction.
+func (r *DriftAnalysisRepo) UpsertDriftAnalysisProjects(ctx context.Context, rows []queries.UpsertDriftAnalysisProjectParams) error {
+	br := r.db.Queries(ctx).UpsertDriftAnalysisProject(ctx, rows)
+	var firstErr error
+	br.Exec(func(_ int, err error) {
+		if err != nil && firstErr == nil {
+			firstErr = err
+		}
+	})
+	if closeErr := br.Close(); closeErr != nil && firstErr == nil {
+		firstErr = closeErr
+	}
+	return firstErr
+}
+
+func (r *DriftAnalysisRepo) UpdateDriftAnalysisRunProgress(ctx context.Context, params queries.UpdateDriftAnalysisRunProgressParams) error {
+	return r.db.Queries(ctx).UpdateDriftAnalysisRunProgress(ctx, params)
+}
+
+func (r *DriftAnalysisRepo) MarkDriftAnalysisRunCompleted(ctx context.Context, params queries.MarkDriftAnalysisRunCompletedParams) error {
+	return r.db.Queries(ctx).MarkDriftAnalysisRunCompleted(ctx, params)
 }
 
 func (r *DriftAnalysisRepo) FindDriftAnalysisRunsByRepositoryID(ctx context.Context, repoId int64, page int) ([]queries.DriftAnalysisRun, error) {
@@ -127,5 +155,14 @@ func (r *DriftAnalysisRepo) DeleteOldestRunsExceedingLimit(ctx context.Context, 
 	return r.db.Queries(ctx).DeleteOldestRunsExceedingLimit(ctx, queries.DeleteOldestRunsExceedingLimitParams{
 		RepositoryID:  repoId,
 		MaxRunsToKeep: maxRunsToKeep,
+	})
+}
+
+// DeleteStaleRunningRuns removes runs left RUNNING by a crashed CLI and returns how many it
+// deleted. Safe to call concurrently from multiple API instances.
+func (r *DriftAnalysisRepo) DeleteStaleRunningRuns(ctx context.Context, staleMinutes int32, maxRows int32) (int64, error) {
+	return r.db.Queries(ctx).DeleteStaleRunningRuns(ctx, queries.DeleteStaleRunningRunsParams{
+		StaleMinutes: staleMinutes,
+		MaxRows:      maxRows,
 	})
 }

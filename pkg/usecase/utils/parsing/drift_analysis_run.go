@@ -14,6 +14,7 @@ func ToDriftAnalysisRunDTO(run queries.DriftAnalysisRun) dto.DriftAnalysisRunDTO
 		TotalProjectsErrored: run.TotalProjectsErrored,
 		TotalProjectsSkipped: run.TotalProjectsSkipped,
 		DurationMillis:       run.AnalysisDurationMillis,
+		Status:               run.Status,
 		CreatedAt:            run.CreatedAt,
 		UpdatedAt:            run.UpdatedAt,
 	}
@@ -53,8 +54,14 @@ func ToDriftAnalysisProjectDTOs(projects []queries.DriftAnalysisProject) []dto.D
 }
 
 func ToDriftAnalysisRunWithProjectsDTO(run queries.DriftAnalysisRun, projects []queries.DriftAnalysisProject) dto.DriftAnalysisRunWithProjectsDTO {
+	// Normalized so the field serializes as [] rather than null.
+	runningProjects := run.RunningProjects
+	if runningProjects == nil {
+		runningProjects = []string{}
+	}
 	return dto.DriftAnalysisRunWithProjectsDTO{
 		DriftAnalysisRunDTO: ToDriftAnalysisRunDTO(run),
+		RunningProjects:     runningProjects,
 		Projects:            ToDriftAnalysisProjectDTOs(projects),
 	}
 }
