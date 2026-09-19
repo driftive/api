@@ -1,6 +1,6 @@
 module driftive.cloud/api
 
-go 1.25.5
+go 1.26.0
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.59.0
@@ -11,14 +11,14 @@ require (
 	github.com/google/go-github/v88 v88.0.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
-	github.com/jferrl/go-githubauth v1.7.0
+	github.com/jferrl/go-githubauth v1.9.1
 	github.com/joho/godotenv v1.5.1
 	github.com/moby/moby/api v1.55.0
 	github.com/ory/dockertest/v4 v4.0.0
 	go.opentelemetry.io/otel v1.44.0
 	go.opentelemetry.io/otel/metric v1.44.0
 	go.opentelemetry.io/otel/sdk/metric v1.44.0
-	golang.org/x/oauth2 v0.36.0
+	golang.org/x/oauth2 v0.37.0
 	resty.dev/v3 v3.0.0-beta.6
 )
 
