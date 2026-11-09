@@ -62,7 +62,7 @@ func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody)
 	resp, err := r.httpClient.R().
 		WithContext(ctx).
 		SetBody(body).
-		SetExpectResponseContentType("application/json").
+		SetResponseExpectContentType("application/json").
 		SetResult(github.AccessTokenResponse{}).
 		Post(fmt.Sprintf("%s/login/oauth/access_token", r.cfg.GithubAppConfig.GithubURL))
 	if err != nil {
@@ -80,7 +80,7 @@ func (r *TokenRefresher) SendHttpReq(ctx context.Context, body RefreshTokenBody)
 		return nil, &RateLimitError{RetryAfter: retryAfter}
 	}
 
-	if resp.IsError() {
+	if resp.IsStatusFailure() {
 		log.Errorf("error response status: %v", resp.Status())
 		return nil, errors.New(refreshTokenRequestErr)
 	}
