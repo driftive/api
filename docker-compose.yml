@@ -24,7 +24,7 @@ services:
     command:
       - /app/driftive
   postgres:
-    image: postgres:18-alpine
+    image: postgres:19-alpine
     environment:
       POSTGRES_USER: driftive
       POSTGRES_PASSWORD: driftive
